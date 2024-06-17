@@ -1,4 +1,4 @@
-# cv_tools
+# Computer Vision Tools (cv_tools)
 
 ## Dependencies
 ```

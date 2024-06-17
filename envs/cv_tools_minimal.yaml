@@ -1,0 +1,54 @@
+name: cv_tools
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - bzip2=1.0.8
+  - ca-certificates=2023.7.22
+  - libffi=3.4.2
+  - libsqlite=3.43.2
+  - libzlib=1.2.13
+  - ncurses=6.4
+  - openssl=3.1.3
+  - pip=23.3
+  - python=3.9.18
+  - readline=8.2
+  - setuptools=68.2.2
+  - tk=8.6.13
+  - tzdata=2023c
+  - wheel=0.41.2
+  - xz=5.2.6
+  - pip:
+      - bbox-visualizer==0.1.0
+      - contourpy==1.1.1
+      - cycler==0.12.1
+      - fonttools==4.43.1
+      - imageio==2.31.5
+      - imgann==0.8.1
+      - importlib-resources==6.1.0
+      - joblib==1.3.2
+      - kiwisolver==1.4.5
+      - matplotlib==3.8.0
+      - networkx==3.2
+      - numpy==1.25.2
+      - opencv-python==4.8.0.76
+      - packaging==23.2
+      - pandas==1.5.2
+      - pillow==9.4.0
+      - pycocotools==2.0.6
+      - pyparsing==3.1.1
+      - python-dateutil==2.8.2
+      - pytz==2023.3.post1
+      - pywavelets==1.4.1
+      - pyyaml==6.0.1
+      - scikit-image==0.19.3
+      - scikit-learn==1.1.3
+      - scikit-multilearn==0.2.0
+      - scipy==1.10.1
+      - seaborn==0.12.1
+      - six==1.16.0
+      - threadpoolctl==3.2.0
+      - tifffile==2023.9.26
+      - yacs==0.1.8
+      - zipp==3.17.0
+prefix: cv_tools_minimal

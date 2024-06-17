@@ -1,0 +1,19 @@
+services:
+  cvat_opa:
+    platform: linux/amd64
+  cvat_utils:
+    platform: linux/amd64
+  cvat_worker_import:
+    platform: linux/amd64
+  cvat_worker_webhooks:
+    platform: linux/amd64
+  cvat_worker_export:
+    platform: linux/amd64
+  cvat_worker_annotation:
+    platform: linux/amd64
+  cvat_server:
+    platform: linux/amd64
+  cvat_ui:
+    platform: linux/amd64
+  nuclio:
+    platform: linux/amd64

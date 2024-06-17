@@ -3,6 +3,7 @@ import shutil
 import sys
 from ultralytics import YOLO
 import itertools
+import copy
 import cv2
 import torch
 import numpy as np
@@ -63,11 +64,12 @@ def yolo_annotate(model, img_dir, frames_fns, conf_thr, labels=None):
 
 
 def yolo_predict(model, dataset, output_dir=None, output_fn=None, model_cat_names=None, predict_cat_names=None,
-                 threshold=None, NMS_threshold=None, detections_per_image=None, img_size=None, track=None, track_buffer=None, new_track_thr=None,
-                 track_match_thr=None, save_pred_frames=False, vis_threshold=None, evaluate=False, warmup=False,
-                 stream=True, device=None, compress=True, quick_debug=False):
+                 threshold=None, NMS_threshold=None, detections_per_image=None, img_size=None,
+                 track=None, track_buffer=None, new_track_thr=None, track_match_thr=None, track_high_thr=None, track_low_thr=None,
+                 save_pred_frames=False, vis_threshold=None, evaluate=False, warmup=False,
+                 stream=True, device=None, compress=True, iouType='bbox', eval_log_info=None, quick_debug=False):
 
-    assert track in [None, utils.SORT, utils.BOT_SORT, utils.BYTE_TRACK]
+    assert track in [None, utils.SORT, utils.BOT_SORT, utils.BYTE_TRACK, utils.DUMMY_TRACK]
     assert stream, 'Without streaming tracking does not work with long videos'
     assert not evaluate or isinstance(dataset, tuple)
     assert not (model_cat_names is None and predict_cat_names is not None)
@@ -106,7 +108,8 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, model_cat_name
     if model_cat_names is not None:
         print(model_cat_names)
         print(_yolo_cat_names)
-        assert list(range(len(model_cat_names))) == _yolo_cat_names or list(model_cat_names) == _yolo_cat_names
+        assert list(range(len(model_cat_names))) == _yolo_cat_names or list(model_cat_names) == _yolo_cat_names, \
+            (list(range(len(model_cat_names))), list(model_cat_names), _yolo_cat_names)
 
     if track is not None:
         if track == utils.SORT:
@@ -120,16 +123,20 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, model_cat_name
             if track_match_thr is not None:
                 track_cfg['iou_threshold'] = track_match_thr
             tracker = sort.Sort(**track_cfg)
-        else:
+        elif track != utils.DUMMY_TRACK:
             from config import YOLO_MODELS
             assert new_track_thr is None or new_track_thr <= 1
             track_cfg = utils.read_yaml(os.path.join(YOLO_MODELS, f'{track}.yaml'))
             if track_buffer is not None:
                 track_cfg['track_buffer'] = track_buffer
             if new_track_thr is not None:
-                track_cfg['new_track_thr'] = new_track_thr
+                track_cfg['new_track_thresh'] = new_track_thr
             if track_match_thr is not None:
                 track_cfg['match_thresh'] = track_match_thr
+            if track_high_thr is not None:
+                track_cfg['track_high_thresh'] = track_high_thr
+            if track_low_thr is not None:
+                track_cfg['track_low_thresh'] = track_low_thr
             track_cfg_fn = os.path.join(output_dir, 'config.tracking.yaml')
             utils.save_yaml(track_cfg, track_cfg_fn)
 
@@ -143,7 +150,7 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, model_cat_name
         remap_cat_names = None
 
     kwargs = dict(
-        project=output_dir, name='predictions', save=save_pred_frames and track != utils.SORT and vis_threshold is None,
+        project=output_dir, name='predictions',
         classes=test_classes_idx, stream=stream, device=utils.get_device(device, model='yolo8'),
         save_crop=False, save_txt=False, save_conf=False
     )
@@ -162,41 +169,54 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, model_cat_name
 
     predictions = []
     images = None if from_coco else []
+    short_video_ids = all([isinstance(source, str) and utils.is_video(source) for source in dataset]) and \
+                      len(dataset) == len(['.'.join(os.path.basename(source).split('.')[:-1]) for source in dataset])
     for i, source in enumerate(dataset):
         is_video = isinstance(source, str) and utils.is_video(source)
         kwargs['source'] = source
-        if track in [None, utils.SORT]:
+        if track in [None, utils.SORT, utils.DUMMY_TRACK]:
+            kwargs['save'] = save_pred_frames and (is_video or vis_threshold is None or vis_threshold == 0)
             outputs = model.predict(**kwargs)
         else:
             kwargs['save'] = True
             outputs = model.track(tracker=track_cfg_fn, **kwargs)
 
+        if is_video:
+            assert not from_coco
+            vid_predictions = []
         for j, outp in enumerate(outputs):
-            if track is not None:
-                if track == utils.SORT:
-                    boxes_xyxy = outp.boxes.xyxy.cpu().numpy()
-                    track_ids = tracker.update(boxes_xyxy)
-                    if len(track_ids) != len(boxes_xyxy):
-                        print(f'WARNING: {len(track_ids)} track_ids and {len(boxes_xyxy)} boxes')
-                    assert len(track_ids) <= len(boxes_xyxy)
-                else:
-                    track_ids = outp.boxes.id.clone().cpu().numpy() if outp.boxes.id is not None else None
+            if track == utils.SORT:
+                boxes_xyxy = outp.boxes.xyxy.cpu().numpy()
+                track_ids = tracker.update(boxes_xyxy)
+                if len(track_ids) != len(boxes_xyxy):
+                    print(f'WARNING: {len(track_ids)} track_ids and {len(boxes_xyxy)} boxes')
+                assert len(track_ids) <= len(boxes_xyxy)
+            elif track != utils.DUMMY_TRACK:
+                track_ids = outp.boxes.id.clone().cpu().numpy() if outp.boxes.id is not None else None
             else:
                 track_ids = None
             sys.stdout.flush()
 
-            img_id = img_ids[i] if from_coco else (j + 1)
+            img_id = img_ids[i] if from_coco else \
+                f'{(".".join(os.path.basename(source).split(".")[:-1]) if short_video_ids else source) if is_video else ""}{"_" if is_video else ""}{(j + 1)}'
             filename = outp.path
+
             if is_video:
                 n_digits_fn = 6 if stream else max(6, int(np.ceil(np.log10(len(outputs)))))
                 filename = f'{".".join(filename.split(".")[:-1])}.frame_{j:0{n_digits_fn}d}.jpg'
-
-            predictions.append({
+                vid_predictions.append({
                 "image_id": img_id,
                 "instances": utils.instances_to_coco_json(
-                    outp, img_id, track=track, track_ids=track_ids, one_based_cats=True,
-                    model_cat_names=model_cat_names, remap_cat_names=remap_cat_names)
+                    outp, filename, track=track if track != utils.DUMMY_TRACK else None, track_ids=track_ids,
+                    one_based_cats=True, model_cat_names=model_cat_names, remap_cat_names=remap_cat_names)
             })
+            else:
+                predictions.append({
+                    "image_id": img_id,
+                    "instances": utils.instances_to_coco_json(
+                        outp, img_id, track=track if track != utils.DUMMY_TRACK else None, track_ids=track_ids,
+                        one_based_cats=True, model_cat_names=model_cat_names, remap_cat_names=remap_cat_names)
+                })
 
             if images is not None:
                 images.append(dict(
@@ -230,23 +250,45 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, model_cat_name
                     shutil.copyfile(src=os.path.join(yolo_pred_dir, os.path.basename(filename)),
                                     dst=os.path.join(output_dir, os.path.basename(filename)))
 
+        if is_video:
+            predictions.extend(copy.deepcopy(vid_predictions))
+            utils.save_json(
+                dict(annotations=list(itertools.chain(*[p["instances"] for p in vid_predictions]))),
+                fn=os.path.join(output_dir, f"{os.path.basename(source[:-4] if source[-4] == '.' else source)}.json"),
+                only_preds=True, compress=compress
+            )
+
         if save_pred_frames and is_video:
-            shutil.copyfile(src=os.path.join(yolo_pred_dir, os.path.basename(source)),
-                            dst=os.path.join(output_dir, os.path.basename(source)))
+            video_fn = os.path.join(f'{yolo_pred_dir}{str(i + 1) if i != 0 else ""}', os.path.basename(source))
+            if not os.path.exists(video_fn) and video_fn.endswith('.mp4') and os.path.exists(f'{video_fn[:-4]}.avi'):
+                video_fn = f'{video_fn[:-4]}.avi'
+
+            if os.path.exists(video_fn):
+                shutil.copyfile(src=video_fn,
+                                dst=os.path.join(output_dir, os.path.basename(video_fn)))
+            else:
+                print(f'WARNING: cannot move {video_fn}.')
 
     if output_fn is None:
         output_fn = os.path.join(output_dir, 'predictions.json')
-    shutil.rmtree(yolo_pred_dir, ignore_errors=True)
+    for i in range(len(dataset)):
+        shutil.rmtree(f'{yolo_pred_dir}{str(i + 1) if i != 0 else ""}', ignore_errors=True)
     predictions = list(itertools.chain(*[p["instances"] for p in predictions]))
-    utils.save_json(
-        dict(annotations=predictions) if from_coco else dict(images=images, annotations=predictions),  output_fn,
-        assert_correct=from_coco, only_preds=True, compress=compress
-    )
+    if not is_video:
+        utils.save_json(
+            dict(annotations=predictions) if from_coco or is_video else dict(images=images, annotations=predictions),
+            output_fn, assert_correct=from_coco or is_video, only_preds=True, compress=compress
+        )
 
     if evaluate:
         assert from_coco
-        utils.evaluate(gt_coco=input_json_fn, dt_coco=output_fn, iouType='bbox',
-                       areaRng=None, areaRngLbl=None, PR_curve=False, allow_zero_area_boxes=True, verbose=True, fix_zero_ann_ids=True)
+        if eval_log_info:
+            print(eval_log_info)
+        r = utils.evaluate(gt_coco=input_json_fn, dt_coco=output_fn, iouType=iouType, maxDets=detections_per_image,
+                           areaRng=None, areaRngLbl=None, PR_curve=True, allow_zero_area_boxes=True,
+                           fix_zero_ann_ids=True, verbose=True)
+        print("Categories:", " ".join([str(c) for c in predict_cat_names]))
+        print("AP50 for each category:", r.precision.mean(axis=0))
     print("Finished predictions")
     return output_fn, predictions
 

@@ -387,6 +387,7 @@ def numpy_to_dt2_input(image):
 
 def read_dt2_config(fn, strict=True):
     cfg = detectron2.config.get_cfg()
+    cfg.set_new_allowed(True)
     cfg.TEST['EVAL_CLASS_SUBSET'] = None
     cfg.MODEL.RESNETS['DROPOUT'] = None
     cfg.MODEL.ROI_BOX_HEAD['DROPOUT'] = None

@@ -7,7 +7,6 @@ import copy
 import cv2
 import torch
 import numpy as np
-from ultralytics.engine.results import Results
 
 if os.path.exists('utils.py'):
     import utils
@@ -27,6 +26,11 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, model_cat_name
     assert stream, 'Without streaming tracking does not work with long videos'
     assert not evaluate or isinstance(dataset, tuple)
     assert not (model_cat_names is None and predict_cat_names is not None)
+
+    if vis_threshold == 0:
+        vis_threshold = None
+    if save_pred_frames and vis_threshold is not None:
+        from ultralytics.engine.results import Results
 
     if isinstance(dataset, tuple):
         # This is implemented for pure predict and SORT tracking
@@ -141,7 +145,7 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, model_cat_name
         is_video = isinstance(source, str) and utils.is_video(source)
         kwargs['source'] = source
         if track in [None, utils.SORT, utils.DUMMY_TRACK]:
-            kwargs['save'] = save_pred_frames and (is_video or vis_threshold is None or vis_threshold == 0)
+            kwargs['save'] = save_pred_frames and (is_video or vis_threshold is None)
             outputs = model.predict(**kwargs)
         else:
             kwargs['save'] = True

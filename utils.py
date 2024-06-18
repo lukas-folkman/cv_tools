@@ -2435,7 +2435,9 @@ def get_split_idx(dataset, n_folds, test_size, val_size, img_labels=None, multi_
 
     if multi_label:
         assert groups is None
-        # inspired by:  https://github.com/akarazniewicz/cocosplit
+        '''
+        CREDIT: https://github.com/akarazniewicz/cocosplit
+        '''
         from skmultilearn.model_selection import IterativeStratification
         # only fractional test/val sizes for multi-label splits
         assert n_folds != 1 or test_size < 1
@@ -4178,18 +4180,6 @@ def coco_to_yolo(dataset, output_dir, segm=False):
                 coord[[1, 3]] /= img['height']  # normalize y
                 assert coord[2] > 0 and coord[3] > 0, annot
             else:
-                # for simplicity only simple polygons
-                # if len(annot['segmentation']) > 1:
-                #     print(f'WARNING: annotation {annot["id"]} disjoint: {annot["segmentation"]}')
-                #     print(f'WARNING: using the first mask')
-                # coord = annot['segmentation'][0]
-                # assert isinstance(coord, list) and \
-                #        len(coord) >= 6 and \
-                #        len(coord) % 2 == 0, annot['segmentation']
-                # coord = np.array(coord, dtype=np.float64)
-                # coord[::2] /= img['width']  # normalize x
-                # coord[1::2] /= img['height']  # normalize y
-
                 if len(annot["segmentation"]) > 1:
                     coord = merge_multi_segment(annot["segmentation"])
                     coord = (np.concatenate(coord, axis=0) / np.array([img['width'], img['height']])).reshape(-1)
@@ -4229,8 +4219,10 @@ def fill_polygon(img, coco_segmentation, out_fn=None):
 
 def _min_index(arr1, arr2):
     """
-    Credit: ultralytics
-    GNU AFFERO GENERAL PUBLIC LICENSE
+    Copyright (c) 2024 Ultralytics
+    AGPL-3.0 license
+    https://github.com/ultralytics/ultralytics
+
     Find a pair of indexes with the shortest distance.
 
     Args:
@@ -4245,7 +4237,10 @@ def _min_index(arr1, arr2):
 
 def merge_multi_segment(segments):
     """
-    Credit: ultralytics
+    Copyright (c) 2024 Ultralytics
+    AGPL-3.0 license
+    https://github.com/ultralytics/ultralytics
+
     GNU AFFERO GENERAL PUBLIC LICENSE
     Merge multi segments to one list. Find the coordinates with min distance between each segment, then connect these
     coordinates with one thin line to merge all segments into one.
@@ -4854,7 +4849,10 @@ def get_fish_summary(df, fps=None, min_frames=0, max_missing_frames=10):
 
 def get_resize_short_edge_shape(h: int, w: int, short_size: int, long_size: int) -> Tuple[int, int]:
     """
-    credit: detectron2
+    Copyright (c) 2020 Meta Research
+    Apache-2.0 license
+    https://github.com/facebookresearch/detectron2
+
     Compute the output size given input size and target short edge length.
     """
     size = short_size * 1.0
@@ -4885,7 +4883,9 @@ def get_resize_long_edge_shape(h: int, w: int, long_size: int, short_size: int) 
 
 def resize_image(img, new_h, new_w, interp):
     """
-       credit: detectron2
+    Copyright (c) 2020 Meta Research
+    Apache-2.0 license
+    https://github.com/facebookresearch/detectron2
     """
     assert img.dtype == np.uint8
     assert len(img.shape) <= 4
@@ -4900,7 +4900,9 @@ def resize_image(img, new_h, new_w, interp):
 
 def resize_bbox(bbox, old_img_h, old_img_w, new_img_h, new_img_w, bbox_format='XYWH'):
     """
-       credit: detectron2
+    Copyright (c) 2020 Meta Research
+    Apache-2.0 license
+    https://github.com/facebookresearch/detectron2
     """
     assert bbox_format.lower() in ['xywh', 'xyxy']
     original_type = type(bbox)
@@ -4919,7 +4921,10 @@ def resize_bbox(bbox, old_img_h, old_img_w, new_img_h, new_img_w, bbox_format='X
 
 def apply_box(box: np.ndarray, old_img_h, old_img_w, new_img_h, new_img_w) -> np.ndarray:
     """
-       credit: detectron2
+    Copyright (c) 2020 Meta Research
+    Apache-2.0 license
+    https://github.com/facebookresearch/detectron2
+
     Apply the transform on an axis-aligned box. By default will transform
     the corner points and use their minimum/maximum to create a new
     axis-aligned box. Note that this default may change the size of your

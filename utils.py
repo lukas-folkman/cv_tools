@@ -482,7 +482,7 @@ class COCOEvalPlus(COCOeval):
             print('WARNING: iouType not specified, using default iouType "bbox"')
         if iouType != 'bbox':
             print(
-                f'WARNING: iouType "{iouType}" specified, Lukas\' implementation for "{iouType}" is merely experimental')
+                f'WARNING: iouType "{iouType}" specified, implementation for "{iouType}" is not thoroughly tested')
         super().__init__(cocoGt=cocoGt, cocoDt=cocoDt, iouType=iouType)
 
         self.params.useCats = useCats

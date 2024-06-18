@@ -1322,8 +1322,14 @@ def is_video(fn, extensions=None):
     return any([fn.lower().endswith(f'.{ext}') for ext in extensions])
 
 
-def read_images_from_dir(dir_name, basename_only=False):
-    return read_files_from_dir(dir_name, filter_func=is_image, basename_only=basename_only)
+def read_images_from_dir(dir_name, basename_only=False, extensions=None):
+    filter_func = is_image if extensions is None else lambda x: is_image(x, extensions=extensions)
+    return read_files_from_dir(dir_name, filter_func=filter_func, basename_only=basename_only)
+
+
+def read_videos_from_dir(dir_name, basename_only=False, extensions=None):
+    filter_func = is_video if extensions is None else lambda x: is_video(x, extensions=extensions)
+    return read_files_from_dir(dir_name, filter_func=filter_func, basename_only=basename_only)
 
 
 def read_files_from_dir(dir_name, filter_func=None, basename_only=False, skip_hidden_files=True):

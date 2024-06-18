@@ -5,45 +5,78 @@
 #PBS -m bea
 #PBS -l ncpus=8
 #PBS -l ngpus=1
-#PBS -l mem=8gb
+#PBS -l mem=16gb
 #PBS -l walltime=100:00:00
 #PBS -q gpuq2
 
+# make sure you have the code
 cd ${HOME}/cv_tools/src || exit
+
+# activate conda environment
 source ${HOME}/miniconda3/etc/profile.d/conda.sh
 conda activate cv_tools
 
+# these are the data, results, and models locations
 DATA_DIR="../data"
 RESULTS_DIR="../results"
 MODEL_DIR="../models"
 
+# these are the model weights files
 YOLO_MODEL="${MODEL_DIR}/yolo8_2024.pt"
 DT2_MODEL="${MODEL_DIR}/frcnn_2024.pt"
 
+# this file specifies the inputs - one per line
+# each line can be either a directory with videos (mp4 files) or a video file (mp4)
+# note that all files must be somewhere within ../data
+# if the location of your video file is "../data/XYZ/ABC/video.mp4", then include a line "XYZ/ABC/video.mp4"
+# if the directory of your video files is "../data/XYZ/ABC", then include a line "XYZ/ABC"
 VIDEO_LIST="VIDEO_LIST.txt"
 
+# read all lines from the VIDEO_LIST file
 while read -r video_path
 do
   if [[ -n "${video_path}" ]]; then
-    echo "VIDEO: ${video_path}"
+
+    # check if the input line is a directory or a single file
+    if [[ -d "${DATA_DIR}/${video_path}" ]]; then
+        subdir="${video_path}"
+      elif [[ -f "${DATA_DIR}/${video_path}" ]]; then
+        subdir="$(dirname "${video_path}")"
+      else
+        echo "ERROR: ${DATA_DIR}/${video_path} does not exist, skipping"
+        continue
+    fi
+
+    # iterate through all the specified models
     for weights_fn in "${YOLO_MODEL}" "${DT2_MODEL}"
     do
+      # based on the model file name, guess which model this is
+      # YOLOv8 models must include "yolo" in their file name
       if [[ "${weights_fn}" == *yolo* ]]; then
         model="yolo8"
+      # Faster R-CNN (Detectron2) models must include "frccn" or "dt2" in their file name
       elif [[ "${weights_fn}" == *frcnn* || "${weights_fn}" == *dt2* ]]; then
         model="dt2"
       else
         model="UNDEFINED"
       fi
 
-      echo "MODEL: ${model}"
+      # only for debugging locally
+      # conda activate ${model}
 
-      OUT_DIR="${RESULTS_DIR}/$(dirname "${video_path}")/${model}"
+      # create the output directory
+      OUT_DIR="${RESULTS_DIR}/${subdir}/${model}"
       mkdir -p "${OUT_DIR}"
+
+      echo "INPUTS: ${video_path}"
+      echo "MODEL: ${model}"
+      echo "RESULTS: ${OUT_DIR}"
+
+      # finally, detect and track
       python detect_and_track.py \
        --input_fn "${DATA_DIR}/${video_path}" --weights_fn "${weights_fn}" --model ${model} --track \
        --model_cat_names "open" "closed" "DJ" --output_dir "${OUT_DIR}" \
-       --do_not_evaluate --do_not_save_pred_frames >> "${OUT_DIR}/fish_track.log" 2>&1
+       --video_input --do_not_evaluate --do_not_save_pred_frames >> "${OUT_DIR}/fish_track.log" 2>&1
     done
   fi
 done < "${VIDEO_LIST}"

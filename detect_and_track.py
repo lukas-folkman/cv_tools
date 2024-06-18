@@ -14,10 +14,11 @@ def main():
                         'that "config.yaml" is located in the same directory as the "weights_fn".')
 
     parser.add_argument('--input_fn', nargs='+',
-                        help='When a JSON dataset/annotations file in the COCO format supplied, specify also "img_dir".'
-                             ' If a single image or video file supplied, do NOT specify "img_dir".')
-    parser.add_argument('--img_dir',
+                        help='When a JSON dataset/annotations file in the COCO format supplied, specify also "input_dir".'
+                             ' If a single image or video file supplied, do NOT specify "input_dir".')
+    parser.add_argument('--input_dir',
                         help='Directory with images referenced in "input_fn".')
+    parser.add_argument('--video_input', action='store_true', help='The inputs to be processed are videos.')
     parser.add_argument('--output_dir', required=True,
                         help='Specify the output directory.')
     parser.add_argument('--output_fn',
@@ -102,21 +103,26 @@ def main():
             if args.img_size is not None:
                 args.img_size = args.img_size[0]
 
-        if args.input_fn is not None and args.img_dir is None and \
-                (all([utils.is_video(x) for x in args.input_fn]) or
-                 all([utils.is_image(x) for x in args.input_fn])):
-            dataset = args.input_fn
-        elif args.input_fn is None and args.img_dir is not None:
-            dataset = args.img_dir
-        elif args.input_fn is not None and args.img_dir is not None \
+        _err_msg = 'The following inputs are possible: video inputs ("input_fn") or image inputs ("input_fn") or' \
+                   ' one directory with images/videos ("input_dir") or one COCO-format dataset with ".json" extension' \
+                   ' ("input_fn") together with one directory with images ("input_dir")'
+        if args.input_fn is None and args.input_dir is not None:
+            dataset = args.input_dir
+        elif args.input_fn is not None and args.input_dir is not None \
                 and len(args.input_fn) == 1 and args.input_fn[0].lower().endswith('.json'):
-            assert not args.track, 'Tracking takes video inputs ("input_fn") or one directory with images ("img_dir")'
-            dataset = (args.input_fn[0], args.img_dir)
+            assert not args.track, 'Tracking takes video inputs ("input_fn") or one directory with images ("input_dir")'
+            dataset = (args.input_fn[0], args.input_dir)
+        elif args.input_fn is not None and args.input_dir is None:
+            if (all([utils.is_video(x) for x in args.input_fn]) or
+                 all([utils.is_image(x) for x in args.input_fn])):
+                dataset = args.input_fn
+            elif len(args.input_fn) == 1 and os.path.isdir(args.input_fn[0]):
+                dataset = args.input_fn[0]
+            else:
+                assert False,_err_msg
         else:
-            assert False, \
-                'The following inputs are possible: video inputs ("input_fn") or image inputs ("input_fn") or' \
-                ' one directory with images ("img_dir") or one COCO-format dataset with ".json" extension' \
-                ' ("input_fn") together with one directory with images ("img_dir")'
+            assert False, _err_msg
+
         print(f'INFO: this is the input dataset: {dataset}')
 
     except AssertionError as e:
@@ -133,7 +139,8 @@ def main():
 
     shared_kwargs = dict(
         dataset=dataset, output_dir=args.output_dir, output_fn=args.output_fn,
-        model_cat_names=args.model_cat_names, threshold=args.threshold, NMS_threshold=args.NMS_threshold,
+        video_input=True if args.video_input else None, model_cat_names=args.model_cat_names,
+        threshold=args.threshold, NMS_threshold=args.NMS_threshold,
         detections_per_image=args.detections_per_image, vis_threshold=args.vis_threshold,
         save_pred_frames=not args.do_not_save_pred_frames, evaluate=not args.do_not_evaluate, device=args.device,
         track=args.track, track_buffer=args.track_buffer, new_track_thr=args.new_track_thr,
@@ -144,9 +151,9 @@ def main():
     for arg in vars(args):
         print(f'--{arg} {getattr(args, arg)}', end=' ')
 
-    print(f'\n\nSTARTED: {datetime.now().strftime("%d %B %Y, %H:%M:%S")}\n')
+    print(f'\nSTARTED: {datetime.now().strftime("%d %B %Y, %H:%M:%S")}')
     predict_func(**shared_kwargs, **kwargs)
-    print(f'\nFINISHED: {datetime.now().strftime("%d %B %Y, %H:%M:%S")}\n')
+    print(f'FINISHED: {datetime.now().strftime("%d %B %Y, %H:%M:%S")}\n')
 
 
 if __name__ == '__main__':

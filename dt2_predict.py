@@ -28,10 +28,10 @@ else:
     import cv_tools as utils
 
 
-def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, model_cat_names=None, predict_cat_names=None,
+def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, video_input=None, model_cat_names=None, predict_cat_names=None,
                 threshold=None, NMS_threshold=None, detections_per_image=None, min_max_img_size=None, imgs_per_batch=1,
                 track=None, track_buffer=None, new_track_thr=None, track_match_thr=None, track_high_thr=None, track_low_thr=None,
-                save_pred_frames=False, vis_threshold=None, evaluate=False, device=None, warm_up=False,
+                save_pred_frames=False, vis_threshold=None, evaluate=False, device=None, warm_up=False, save_config=False,
                 compress=True, eval_log_info=None, one_based_video_frames=False, quick_debug=False, strict=True):
     assert track in [None, True, False, utils.BOT_SORT]
     if track is True:
@@ -43,10 +43,17 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, model_cat_
     assert not (model_cat_names is None and predict_cat_names is not None)
     os.makedirs(output_dir, exist_ok=True)
 
+    assert video_input in [None, False, True]
     if isinstance(dataset, str) and os.path.isdir(dataset):
-        dataset = sorted(utils.read_images_from_dir(dir_name=dataset, basename_only=False))
+        vids = utils.read_videos_from_dir(dir_name=dataset, basename_only=False, extensions='mp4')
+        if video_input:
+            dataset = sorted(vids)
+        else:
+            imgs = utils.read_images_from_dir(dir_name=dataset, basename_only=False)
+            if len(imgs) == 0 and len(vids) != 0:
+                print(f'WARNING: Did not find any images in {dataset}, did you forget to specify "video_input=True"?')
+            dataset = sorted(imgs)
 
-    video_input = None
     if utils.is_iterable(dataset):
         if isinstance(dataset, tuple) and len(dataset) == 2:
             dataset_name = 'predictions'
@@ -62,13 +69,15 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, model_cat_
         else:
             dataset_name = None
             if all([utils.is_image(x) for x in dataset]):
+                assert video_input is None or video_input is False, f'Found images but video_input is {video_input}'
                 video_input = False
             elif all([utils.is_video(x) for x in dataset]):
                 if not all([utils.is_video(x, extensions='mp4') for x in dataset]):
                     raise ValueError(f'Only mp4 videos are supported: {dataset}')
+                assert video_input is None or video_input is True, f'Found videos but video_input is {video_input}'
                 video_input = True
             else:
-                raise ValueError(f'Incorrect inputs: {dataset}')
+                raise ValueError(f'Incorrect inputs (do not mix images and videos): {dataset}')
     else:
         assert isinstance(dataset, str), dataset
         dataset_name = dataset
@@ -108,6 +117,8 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, model_cat_
     else:
         remap_cat_names = None
     cfg.freeze()
+    if save_config:
+        utils.save_yacs(cfg, os.path.join(output_dir, 'config.yaml'))
 
     model = build_model(cfg)
     DetectionCheckpointer(model).load(weights_fn)
@@ -212,6 +223,7 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, model_cat_
         else:
             # video_input
             for inp_fn in dataset:
+                print(inp_fn)
                 vid_predictions = []
                 assert os.path.isfile(inp_fn)
                 input_video = cv2.VideoCapture(inp_fn)

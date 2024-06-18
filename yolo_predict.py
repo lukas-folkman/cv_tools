@@ -14,7 +14,7 @@ else:
     import cv_tools as utils
 
 
-def yolo_predict(model, dataset, output_dir=None, output_fn=None, model_cat_names=None, predict_cat_names=None,
+def yolo_predict(model, dataset, output_dir=None, output_fn=None, video_input=None, model_cat_names=None, predict_cat_names=None,
                  threshold=None, NMS_threshold=None, detections_per_image=None, img_size=None,
                  track=None, track_buffer=None, new_track_thr=None, track_match_thr=None, track_high_thr=None, track_low_thr=None,
                  save_pred_frames=False, vis_threshold=None, evaluate=False, warmup=False,
@@ -31,6 +31,17 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, model_cat_name
         vis_threshold = None
     if save_pred_frames and vis_threshold is not None:
         from ultralytics.engine.results import Results
+
+    assert video_input in [None, False, True]
+    if isinstance(dataset, str) and os.path.isdir(dataset):
+        vids = utils.read_videos_from_dir(dir_name=dataset, basename_only=False)
+        if video_input:
+            dataset = sorted(vids)
+        else:
+            imgs = utils.read_images_from_dir(dir_name=dataset, basename_only=False)
+            if len(imgs) == 0 and len(vids) != 0:
+                print(f'WARNING: Did not find any images in {dataset}, did you forget to specify "video_input=True"?')
+            dataset = sorted(imgs)
 
     if isinstance(dataset, tuple):
         # This is implemented for pure predict and SORT tracking
@@ -138,11 +149,18 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, model_cat_name
     shutil.rmtree(yolo_pred_dir, ignore_errors=True)
 
     predictions = []
+    just_videos = []
     images = None if from_coco else []
     short_video_ids = all([isinstance(source, str) and utils.is_video(source) for source in dataset]) and \
                       len(dataset) == len(['.'.join(os.path.basename(source).split('.')[:-1]) for source in dataset])
     for i, source in enumerate(dataset):
-        is_video = isinstance(source, str) and utils.is_video(source)
+        if isinstance(source, str) and utils.is_video(source):
+            assert video_input is None or video_input is True, f'Found {source} but video_input is {video_input}'
+            is_video = True
+            print(source)
+        else:
+            is_video = False
+        just_videos.append(is_video)
         kwargs['source'] = source
         if track in [None, utils.SORT, utils.DUMMY_TRACK]:
             kwargs['save'] = save_pred_frames and (is_video or vis_threshold is None)
@@ -245,10 +263,10 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, model_cat_name
     for i in range(len(dataset)):
         shutil.rmtree(f'{yolo_pred_dir}{str(i + 1) if i != 0 else ""}', ignore_errors=True)
     predictions = list(itertools.chain(*[p["instances"] for p in predictions]))
-    if not is_video:
+    if len(just_videos) == 0 or not np.all(just_videos):
         utils.save_json(
-            dict(annotations=predictions) if from_coco or is_video else dict(images=images, annotations=predictions),
-            output_fn, assert_correct=from_coco or is_video, only_preds=True, compress=compress
+            dict(annotations=predictions) if from_coco else dict(images=images, annotations=predictions),
+            output_fn, assert_correct=from_coco, only_preds=True, compress=compress
         )
 
     if evaluate:

@@ -62,7 +62,7 @@ def main():
 
         if args.annotate is not None:
             print('\nAUTO-ANNOTATION')
-            from yolo_predict import yolo_annotate
+            from yolo_annotate import yolo_annotate
             dataset = yolo_annotate(model=args.annotate, img_dir=img_dir, frames_fns=frames_fns, labels=args.labels, conf_thr=args.conf_thr)
 
         print('Creating a CVAT task')

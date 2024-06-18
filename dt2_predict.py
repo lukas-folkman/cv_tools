@@ -28,30 +28,15 @@ else:
     import cv_tools as utils
 
 
-def main():
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--model', required=True)
-    parser.add_argument('--img_dir', required=True)
-    parser.add_argument('--output_fn', required=True)
-    parser.add_argument('--conf_thr', type=float, default=0)
-    args = parser.parse_args()
-
-    frames_fns = sorted([os.path.join(args.img_dir, fn) for fn in os.listdir(args.img_dir) if utils.is_image(fn)])
-    dataset = dt2_predict(model=args.model, img_dir=args.img_dir, frames_fns=frames_fns, conf_thr=args.conf_thr)
-    utils.fill_in_areas(dataset['annotations'], fill_in_ids=True, fill_in_iscrowd=True)
-    utils.save_json(dataset, args.output_fn)
-
-
 def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, model_cat_names=None, predict_cat_names=None,
                 threshold=None, NMS_threshold=None, detections_per_image=None, min_max_img_size=None, imgs_per_batch=1,
                 track=None, track_buffer=None, new_track_thr=None, track_match_thr=None, track_high_thr=None, track_low_thr=None,
                 save_pred_frames=False, vis_threshold=None, evaluate=False, device=None, warm_up=False,
                 compress=True, eval_log_info=None, one_based_video_frames=False, quick_debug=False, strict=True):
-    if save_pred_frames:
-        # fail early import
-        import bbox_visualizer
-    assert track in [None, utils.BOT_SORT]
+    assert track in [None, True, False, utils.BOT_SORT]
+    if track is True:
+        track = utils.BOT_SORT
+
     if imgs_per_batch is None:
         imgs_per_batch = 1
     assert imgs_per_batch is not None and imgs_per_batch > 0
@@ -87,6 +72,9 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, model_cat_
     else:
         assert isinstance(dataset, str), dataset
         dataset_name = dataset
+
+    if predict_cat_names is None:
+        predict_cat_names = model_cat_names
 
     if isinstance(cfg, str):
         cfg = read_dt2_config(cfg, strict=strict)
@@ -162,7 +150,6 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, model_cat_
         if track:
             assert new_track_thr is None or new_track_thr <= 1
             from botsort.tracker.mc_bot_sort import BoTSORT
-            from sort import sort
             track_cfg = SimpleNamespace(
                 track_high_thresh=track_high_thr if track_high_thr is not None else 0.5,
                 track_low_thresh=track_low_thr if track_low_thr is not None else 0.1,
@@ -210,7 +197,7 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, model_cat_
                 if track:
                     try:
                         update_tracker_with_detection(
-                            tracker=tracker, det_per_img=det_per_img, img=img, iou_func=sort.iou_batch)
+                            tracker=tracker, det_per_img=det_per_img, img=img, iou_func=None)
                         det_per_img = [d for d in det_per_img if 'track_id' in d]
                     except:
                         print(f'Tracking failed for {inp_fn}')
@@ -259,7 +246,7 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, model_cat_
                     if track:
                         try:
                             update_tracker_with_detection(
-                                tracker=tracker, det_per_img=det_per_img, img=frame, iou_func=sort.iou_batch)
+                                tracker=tracker, det_per_img=det_per_img, img=frame, iou_func=None)
                             det_per_img = [d for d in det_per_img if 'track_id' in d]
                         except:
                             print(f'Tracking failed for frame {f}')
@@ -339,7 +326,7 @@ def update_tracker(tracker, det_per_img, image,
     return tracks
 
 
-def update_tracker_with_detection(tracker, det_per_img, img, iou_func):
+def update_tracker_with_detection(tracker, det_per_img, img, iou_func=None):
     if len(det_per_img) != 0:
         tracks = update_tracker(
             tracker=tracker,
@@ -353,9 +340,10 @@ def update_tracker_with_detection(tracker, det_per_img, img, iou_func):
             # tracks: [[x, y, w, h, score, class, track_id, idx], ...]
             for idx, t in zip(tracks[:, -1].astype(int), tracks[:, :-1]):
                 assert det_per_img[idx]['score'] == t[4], (det_per_img[idx], t)
-                iou = iou_func(np.asarray([utils.from_XYWH_to_XYXY(det_per_img[idx]['bbox'])]),
-                               np.asarray([utils.from_XYWH_to_XYXY(t[:4])]))
-                assert np.all(iou > 0.5), (det_per_img[idx], t, iou)
+                if iou_func is not None:
+                    iou = iou_func(np.asarray([utils.from_XYWH_to_XYXY(det_per_img[idx]['bbox'])]),
+                                   np.asarray([utils.from_XYWH_to_XYXY(t[:4])]))
+                    assert np.all(iou > 0.5), (det_per_img[idx], t, iou)
                 det_per_img[idx]['track_id'] = int(t[6])  # update id
                 det_per_img[idx]['bbox'] = t[:4].tolist() # update box
 
@@ -444,7 +432,3 @@ def build_batchable_detection_test_loader(cfg, dataset_name, batch_size=None, nu
         )
 
     return data_loader
-
-
-if __name__ == '__main__':
-    main()

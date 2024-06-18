@@ -18,7 +18,7 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFilter
 from typing import Collection, Union, List
 from six import string_types
-import seaborn as sns
+# import seaborn as sns
 import matplotlib.pyplot as plt
 from collections import Counter
 from collections.abc import Iterable
@@ -818,6 +818,7 @@ def plot_PR_curve(precision, recall=None, catIds=None, all_catIds=None, average_
                   f1_curves=False, f1_values=None, f1_color="lightgrey", f1_annot_color=None, f1_lw=None,
                   f1_format="$F_1={:0.1f}$",
                   f1_legend=None, f1_fontsize=None):
+    import seaborn as sns
     if color is not None and isinstance(color, int):
         color = sns.color_palette(palette=palette)[color % 10]
     if f1_values is None:
@@ -866,6 +867,7 @@ def plot_PR_curve(precision, recall=None, catIds=None, all_catIds=None, average_
 
 def make_PR_plot(r, split, seed, label=None, title=None, show_mAP=True, show_F1=False, linestyle=None, color=None,
                  despine=True, legend='lower left', ax=None):
+    import seaborn as sns
     if seed is None:
         precision = [r[split][s].eval.calc_PR_curve() for s in r]
         # stack the different seeds and average across seeds
@@ -1263,21 +1265,28 @@ def get_device(device=None, model=None):
         # mps overwhelms my Mac
         # else 'mps' if torch.backends.mps.is_available() \
 
+    if device.startswith('cuda'):
+        cuda_id = str(int(device.split(':')[1]) if ':' in device else 0)
+    else:
+        cuda_id = None
+
     if model == 'yolo8':
-        device = device.replace('cuda:', '')
-        if device == 'cuda':
-            device = '0'
+        if cuda_id is not None:
+            device = cuda_id
         assert device in ['cpu', 'mps'] or str(int(device)) == device
     elif model == 'dt2':
-        if device.startswith('cuda') and ':' in device:
-            cuda_id = int(device.split(':')[1])
-            os.environ['CUDA_VISIBLE_DEVICES'] = str(cuda_id)
+        if cuda_id is not None:
+            os.environ['CUDA_VISIBLE_DEVICES'] = cuda_id
             device = 'cuda'
-        assert device in ['cuda', 'cpu', 'mps']
-    else:
         assert device in ['cuda', 'cpu', 'mps']
 
     return device
+
+
+def load_model_cat_names_from_file(fn):
+    dataset = read_json(fn, assert_correct=False, verbose=False)
+    assert_categories_correct(dataset, strict=False)
+    return get_category_names(dataset)
 
 
 def savefig(filename, fig=None, bbox_inches='tight', format=None, *args, **kwargs):
@@ -2219,7 +2228,7 @@ def get_category_ids(dataset, with_names=False, lower_case=False, as_dict=False,
 def plot_bboxes(img, annotations, cat_dict=None, img_dir=None, palette='bright', draw_labels=True,
                 thickness=3, is_opaque=False, alpha=0.5):
     import bbox_visualizer as bbv
-
+    import seaborn as sns
     # print('img:', img.shape)
     # print('annotations:', annotations[0])
     # print('cat_dict:', cat_dict)

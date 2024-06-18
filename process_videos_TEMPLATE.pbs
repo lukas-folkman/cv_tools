@@ -9,7 +9,6 @@
 #PBS -l walltime=100:00:00
 #PBS -q gpuq2
 
-module load cuda/11.8local
 cd ${HOME}/cv_tools/src || exit
 source ${HOME}/miniconda3/etc/profile.d/conda.sh
 conda activate cv_tools

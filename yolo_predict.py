@@ -241,11 +241,16 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, video_input=No
 
         if is_video:
             predictions.extend(copy.deepcopy(vid_predictions))
+            pred_fn = os.path.join(output_dir, f"{os.path.basename(source[:-4] if source[-4] == '.' else source)}")
             utils.save_json(
                 dict(annotations=list(itertools.chain(*[p["instances"] for p in vid_predictions]))),
-                fn=os.path.join(output_dir, f"{os.path.basename(source[:-4] if source[-4] == '.' else source)}.json"),
-                only_preds=True, compress=compress
+                fn=f'{pred_fn}.json', only_preds=True, compress=compress
             )
+            try:
+                pred_df = utils.predictions_to_df(pred_fn=f'{pred_fn}.json', categories=predict_cat_names)
+                pred_df.to_csv(f'{pred_fn}.csv.gz', index=False)
+            except:
+                print('WARNING: Cannot transform the JSON file with detections into a CSV dataframe.')
 
         if save_pred_frames and is_video:
             video_fn = os.path.join(f'{yolo_pred_dir}{str(i + 1) if i != 0 else ""}', os.path.basename(source))

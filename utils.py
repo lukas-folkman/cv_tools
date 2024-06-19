@@ -4737,7 +4737,8 @@ def get_size(obj, seen=None):
 
 
 def predictions_to_df(dataset=None, pred_fn=None, categories=None, input_fn=None, split_words=['.frame_', '.'],
-                      frame_id_type=pd.Int64Dtype(), fish_id_type=pd.Int64Dtype(), box_id_type=pd.Int64Dtype()):
+                      frame_id_type=pd.Int64Dtype(), fish_id_type=pd.Int64Dtype(), box_id_type=pd.Int64Dtype(),
+                      all_tracks_start_at_one=True):
     if dataset is None:
         if input_fn is not None:
             dataset = read_json(input_fn)
@@ -4768,7 +4769,7 @@ def predictions_to_df(dataset=None, pred_fn=None, categories=None, input_fn=None
         for ann in anns[img['id']]:
             records.append([
                 os.path.basename(img['file_name'].split(split_words[0])[0]),
-                ann['track_id'],
+                ann['track_id'] if 'track_id' in ann else None,
                 img['file_name'].split(split_words[0])[1].split(split_words[1])[0],
                 ann['bbox'][0],
                 ann['bbox'][1],
@@ -4783,12 +4784,16 @@ def predictions_to_df(dataset=None, pred_fn=None, categories=None, input_fn=None
 
     df = pd.DataFrame.from_records(
         records,
-        columns=['video_id', 'fish_id', 'frame_id', 'x1', 'y1', 'width', 'heigh', 'area', 'label', 'score', 'filename']) # 'box_id',
+        columns=['video_id', 'fish_id', 'frame_id', 'x1', 'y1', 'width', 'height', 'area', 'label', 'score', 'filename']) # 'box_id',
     df['video_id'] = df['video_id'].astype(str)
     df['frame_id'] = df['frame_id'].astype(frame_id_type)
     df['fish_id'] = df['fish_id'].astype(fish_id_type)
     # df['box_id'] = df['box_id'].astype(box_id_type)
     df = df.sort_values(['video_id', 'fish_id', 'frame_id'])
+
+    if all_tracks_start_at_one:
+        df['fish_id'] -= (df['fish_id'].min() - 1)
+
     return df
 
 

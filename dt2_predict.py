@@ -270,12 +270,19 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, video_inpu
                             cat_names=model_cat_names, vis_threshold=vis_threshold,
                             output_video=output_video, one_based=False, save=True
                         )
-                predictions.extend(copy.deepcopy(vid_predictions))
-                save_predictions_as_json(
-                    predictions=vid_predictions,
-                    output_fn=os.path.join(os.path.dirname(output_fn), f"{os.path.basename(inp_fn[:-4] if inp_fn[-4] == '.' else inp_fn)}.json"),
-                    model_cat_names=model_cat_names, remap_cat_names=remap_cat_names, compress=compress)
                 input_video.release()
+                predictions.extend(copy.deepcopy(vid_predictions))
+                pred_fn = os.path.join(os.path.dirname(output_fn), f"{os.path.basename(inp_fn[:-4] if inp_fn[-4] == '.' else inp_fn)}")
+                save_predictions_as_json(
+                    predictions=vid_predictions, output_fn=f'{pred_fn}.json', model_cat_names=model_cat_names,
+                    remap_cat_names=remap_cat_names, compress=compress
+                )
+                try:
+                    pred_df = utils.predictions_to_df(pred_fn=f'{pred_fn}.json', categories=predict_cat_names)
+                    pred_df.to_csv(f'{pred_fn}.csv.gz', index=False)
+                except:
+                    print('WARNING: Cannot transform the JSON file with detections into a CSV dataframe.')
+
                 if save_pred_frames:
                     output_video.release()
 

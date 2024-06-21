@@ -2,7 +2,6 @@ import copy
 import os
 import itertools
 import numpy as np
-from types import SimpleNamespace
 import cv2
 import torch
 import torch.utils.data as torchdata
@@ -161,20 +160,9 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, video_inpu
         if track:
             assert new_track_thr is None or new_track_thr <= 1
             from botsort.tracker.mc_bot_sort import BoTSORT
-            track_cfg = SimpleNamespace(
-                track_high_thresh=track_high_thr if track_high_thr is not None else 0.5,
-                track_low_thresh=track_low_thr if track_low_thr is not None else 0.1,
-                new_track_thresh=new_track_thr if new_track_thr is not None else 0.6,
-                track_buffer=track_buffer if track_buffer is not None else 30,
-                match_thresh=track_match_thr if track_match_thr is not None else 0.8,
-                cmc_method='sparseOptFlow',
-                name='DT2',
-                ablation=False,
-                with_reid=False,
-                proximity_thresh=0.5,
-                appearance_thresh=0.25,
-                mot20=False
-            )
+            track_cfg = utils.get_track_config(
+                track_high_thr=track_high_thr, track_low_thr=track_low_thr, new_track_thr=new_track_thr,
+                track_buffer=track_buffer, track_match_thr=track_match_thr)
             tracker = BoTSORT(args=track_cfg)
 
         predictor = DefaultPredictor(cfg)
@@ -207,7 +195,7 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, video_inpu
                 det_per_img = instances_to_coco_json(outp["instances"][idx].to("cpu"), img_id=inp_fn)
                 if track:
                     try:
-                        update_tracker_with_detection(
+                        utils.update_tracker_with_detection(
                             tracker=tracker, det_per_img=det_per_img, img=img, iou_func=None)
                         det_per_img = [d for d in det_per_img if 'track_id' in d]
                     except:
@@ -257,7 +245,7 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, video_inpu
                     det_per_img = instances_to_coco_json(outp["instances"][idx].to("cpu"), img_id=frame_fn)
                     if track:
                         try:
-                            update_tracker_with_detection(
+                            utils.update_tracker_with_detection(
                                 tracker=tracker, det_per_img=det_per_img, img=frame, iou_func=None)
                             det_per_img = [d for d in det_per_img if 'track_id' in d]
                         except:
@@ -307,64 +295,6 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, video_inpu
 
     print("Finished predictions")
     return output_fn, predictions
-
-
-def update_tracker(tracker, det_per_img, image,
-                   aspect_ratio_thresh=10, min_box_area=1, box_format='xywh'):
-    '''
-
-    :param tracker: BoTSORT tracker object
-    :param det_per_img: (n,6) array of detections per image [[x, y, x, y, conf, cls], ...]
-                        det_per_img WILL BE MODIFIED IN PLACE
-    :param image: (h, w, c) array of pixels in the BGR (cv2) format
-    :return: track_ids
-    '''
-
-    if len(det_per_img):
-        if box_format.lower() == 'xywh':
-            det_per_img[:, :4] = utils.from_XYWH_to_XYXY(det_per_img[:, :4])
-        else:
-            assert box_format.lower() == 'xyxy'
-    else:
-        det_per_img = []
-
-    output_stracks = tracker.update(det_per_img, image)
-
-    # REMOVE THIS IN THE FUTURE
-    for t in output_stracks:
-        vertical = t.tlwh[2] / t.tlwh[3] > aspect_ratio_thresh
-        too_small = t.tlwh[2] * t.tlwh[3] <= min_box_area
-        assert not too_small and not vertical, det_per_img
-
-    tracks = np.asarray(
-        [t.tlwh.tolist() + [t.score, t.cls, t.track_id, t.idx] for t in output_stracks],
-        dtype=np.float32
-    )
-    assert len(tracks) == 0 or len(tracks) == len(set(tracks[:, -1])), "Not a unique matching to detections"
-
-    return tracks
-
-
-def update_tracker_with_detection(tracker, det_per_img, img, iou_func=None):
-    if len(det_per_img) != 0:
-        tracks = update_tracker(
-            tracker=tracker,
-            det_per_img=np.asarray([
-                np.asarray(det['bbox'] + [det['score'], -1], dtype=np.float32) for det in det_per_img
-            ]),
-            image=img
-        )
-        # print(tracks)
-        if len(tracks) != 0:
-            # tracks: [[x, y, w, h, score, class, track_id, idx], ...]
-            for idx, t in zip(tracks[:, -1].astype(int), tracks[:, :-1]):
-                assert det_per_img[idx]['score'] == t[4], (det_per_img[idx], t)
-                if iou_func is not None:
-                    iou = iou_func(np.asarray([utils.from_XYWH_to_XYXY(det_per_img[idx]['bbox'])]),
-                                   np.asarray([utils.from_XYWH_to_XYXY(t[:4])]))
-                    assert np.all(iou > 0.5), (det_per_img[idx], t, iou)
-                det_per_img[idx]['track_id'] = int(t[6])  # update id
-                det_per_img[idx]['bbox'] = t[:4].tolist() # update box
 
 
 def visualize_predictions(

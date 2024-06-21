@@ -2,6 +2,7 @@ import json
 import sys
 import io
 import warnings
+from types import SimpleNamespace
 from itertools import product, tee
 import base64
 import yaml
@@ -288,7 +289,7 @@ class COCOResults:
         assert isinstance(gt_coco, (str, dict))
         assert isinstance(dt_coco, (str, dict, np.ndarray))
         assert not isinstance(gt_coco, str) or file_or_gzip_exists(gt_coco)
-        assert not isinstance(dt_coco, str) or file_or_gzip_exists(dt_coco)
+        assert not isinstance(dt_coco, str) or file_or_gzip_exists(dt_coco), dt_coco
         assert not isinstance(gt_coco, dict) or (
                 'annotations' in gt_coco and 'images' in gt_coco and 'categories' in gt_coco)
         assert not isinstance(dt_coco, dict) or ('annotations' in dt_coco)
@@ -1741,7 +1742,7 @@ def read_json(fn, assert_correct=True, only_preds=False, only_imgs=False, add_mi
 def read_tracking_json(fn, assert_correct=False, verbose=False, categories='ventilation', fix_track_ids=True,
                        fix_areas=True, fix_width_height_by_loading=False, fix_width=1280, fix_height=960,
                        fill_in_ids=True, fill_in_iscrowd=True, fix_to_basenames=True, fix_image_ids=True,
-                       fill_in_images=True, change_to_zero_based_frames=True):
+                       fill_in_images=True, change_to_zero_based_frames=False):
     if categories == 'ventilation':
         categories = ["open", "closed", "DJ"]
     dataset = read_json(fn, assert_correct=assert_correct, fill_in_images=fill_in_images,
@@ -1755,7 +1756,7 @@ def read_tracking_json(fn, assert_correct=False, verbose=False, categories='vent
     if fix_track_ids:
         for ann in dataset['annotations']:
             video = ann['image_id'].split('.frame_')[0]
-            ann['track_id'] = f"{video}_{ann['track_id']}"
+            # ann['track_id'] = f"{video}_{ann['track_id']}"
 
     return dataset
 
@@ -1772,14 +1773,18 @@ def read_imgs_and_resize(dataset, img_dir, resize, group_splitter='_', n_parts=1
     return img_arr, np.asarray(metadata)
 
 
-def select_fish_from_GT(dataset, ground_truth, iou_thr=0.5):
+def select_fish_from_GT(dataset, ground_truth, iou_thr=0.5, allow_missing_dt_frames=False, fix_DJs=False,
+                        remove_unmatched_dt_boxes=True):
+
+    # SUBSET TO ONLY GROUND TRUTH IMAGES
     gt_img_fns = [img['file_name'] for img in ground_truth['images']]
     assert len(gt_img_fns) == len(set(gt_img_fns))
     dt_img_fns = [img['file_name'] for img in dataset['images']]
     assert len(dt_img_fns) == len(set(dt_img_fns))
-    # assert set(dt_img_fns).issuperset(gt_img_fns), set(gt_img_fns).difference(dt_img_fns)
+    assert allow_missing_dt_frames or set(dt_img_fns).issuperset(gt_img_fns), set(gt_img_fns).difference(dt_img_fns)
     dataset['images'] = [img for img in dataset['images'] if img['file_name'] in gt_img_fns]
     if len(set(gt_img_fns).difference(dt_img_fns)) != 0:
+        assert allow_missing_dt_frames
         print('WARNING: some frames have no detections and are missing:', set(gt_img_fns).difference(dt_img_fns))
         print(len(dataset['images']))
         add = [img for img in ground_truth['images'] if img['file_name'] in set(gt_img_fns).difference(dt_img_fns)]
@@ -1788,10 +1793,15 @@ def select_fish_from_GT(dataset, ground_truth, iou_thr=0.5):
         dataset['images'].extend(add)
         print(add)
         print(len(dataset['images']))
+    assert set([img['file_name'] for img in dataset['images']]) == set(gt_img_fns)
 
+    # SUBSET TO ANNOTATIONS IN THE GROUND TRUTH IMAGES
     dataset['annotations'] = filter_annotations_with_images(dataset)
+
+    # EVALUATE TO MATCH GT-BOXES TO DT-BOXES
     results = evaluate(gt_coco=ground_truth, dt_coco=dataset, iouThrs=iou_thr, useCats=False, verbose=False)
 
+    # CREATE DT-TO-GT DICTIONARY
     iouThr_idx = [i for i, t in enumerate(results.eval._paramsEval.iouThrs) if t == iou_thr][0]
     dt_to_gt = {}
     for img in results.eval.evalImgs:
@@ -1805,17 +1815,123 @@ def select_fish_from_GT(dataset, ground_truth, iou_thr=0.5):
             assert set(dtIds[dtMatches != 0]) == set(gtMatches[gtMatches != 0])
             for gt_id, dt_id in zip(gtIds[gtMatches != 0], gtMatches[gtMatches != 0]):
                 dt_to_gt[dt_id] = gt_id
-    dataset['annotations'] = [ann for ann in dataset['annotations'] if ann['id'] in dt_to_gt.keys()]
+
+    # EACH GT-BOX ONLY MATCHED TO ONE DT-BOX
+    assert len(list(dt_to_gt.values())) == len(set(list(dt_to_gt.values())))
+
+    if remove_unmatched_dt_boxes:
+        # KEEP ONLY ANNOTATIONS THAT MATCH A GT-BOX
+        dataset['annotations'] = [ann for ann in dataset['annotations'] if ann['id'] in dt_to_gt.keys()]
+
+    # CHANGE DJs TO OPEN (hacky imputation)
     for ann in dataset['annotations']:
-        if ann['category_id'] not in [1, 2]:
-            # print('FIXING DJ TO OPEN')
-            # print('Ground truth:', [x['category_id'] for x in ground_truth['annotations'] if x['id'] == dt_to_gt[ann['id']]])
-            assert ann['category_id'] == 3, ann
-            ann['category_id'] = 1
-        ann['gt_id'] = dt_to_gt[ann['id']]
+        if ann['id'] in dt_to_gt:
+            ann['gt_id'] = dt_to_gt[ann['id']]
+        if fix_DJs:
+            if ann['category_id'] not in [1, 2]:
+                print('FIXING DJ TO OPEN')
+                assert ann['category_id'] == 3, ann
+                ann['category_id'] = 1
 
 
-def track_GT(ground_truth, track_iou=0.1, assert_iou=0.4):
+def update_tracker(tracker, det_per_img, image,
+                   aspect_ratio_thresh=10, min_box_area=1, box_format='xywh'):
+    '''
+
+    :param tracker: BoTSORT tracker object
+    :param det_per_img: (n,6) array of detections per image [[x, y, x, y, conf, cls], ...]
+                        det_per_img WILL BE MODIFIED IN PLACE
+    :param image: (h, w, c) array of pixels in the BGR (cv2) format
+    :return: track_ids
+    '''
+
+    if len(det_per_img):
+        if box_format.lower() == 'xywh':
+            det_per_img[:, :4] = from_XYWH_to_XYXY(det_per_img[:, :4])
+        else:
+            assert box_format.lower() == 'xyxy'
+    else:
+        det_per_img = []
+
+    output_stracks = tracker.update(det_per_img, image)
+
+    # REMOVE THIS IN THE FUTURE
+    for t in output_stracks:
+        vertical = t.tlwh[2] / t.tlwh[3] > aspect_ratio_thresh
+        too_small = t.tlwh[2] * t.tlwh[3] <= min_box_area
+        assert not too_small and not vertical, det_per_img
+
+    tracks = np.asarray(
+        [t.tlwh.tolist() + [t.score, t.cls, t.track_id, t.idx] for t in output_stracks],
+        dtype=np.float32
+    )
+    assert len(tracks) == 0 or len(tracks) == len(set(tracks[:, -1])), "Not a unique matching to detections"
+
+    return tracks
+
+
+def update_tracker_with_detection(tracker, det_per_img, img, iou_func=None, assert_iou=0.5):
+    if len(det_per_img) != 0:
+        tracks = update_tracker(
+            tracker=tracker,
+            det_per_img=np.asarray([
+                np.asarray(det['bbox'] + [det['score'], -1], dtype=np.float32) for det in det_per_img
+            ]),
+            image=img
+        )
+
+        if len(tracks) != 0:
+            # tracks: [[x, y, w, h, score, class, track_id, idx], ...]
+            for idx, t in zip(tracks[:, -1].astype(int), tracks[:, :-1]):
+                assert abs(det_per_img[idx]['score'] - t[4]) < 1e-3, (det_per_img[idx], t)
+                if iou_func is not None:
+                    iou = iou_func(np.asarray([from_XYWH_to_XYXY(det_per_img[idx]['bbox'])]),
+                                   np.asarray([from_XYWH_to_XYXY(t[:4])]))
+                    assert np.all(iou > assert_iou), (det_per_img[idx], t, iou)
+                det_per_img[idx]['track_id'] = int(t[6])  # update id
+                det_per_img[idx]['bbox'] = t[:4].tolist() # update box
+
+
+def get_track_config(track_high_thr=None, track_low_thr=None, new_track_thr=None, track_buffer=None, track_match_thr=None):
+    track_cfg = SimpleNamespace(
+        track_high_thresh=track_high_thr if track_high_thr is not None else 0.5,
+        track_low_thresh=track_low_thr if track_low_thr is not None else 0.1,
+        new_track_thresh=new_track_thr if new_track_thr is not None else 0.6,
+        track_buffer=track_buffer if track_buffer is not None else 30,
+        match_thresh=track_match_thr if track_match_thr is not None else 0.8,
+        cmc_method='sparseOptFlow',
+        name='DT2',
+        ablation=False,
+        with_reid=False,
+        proximity_thresh=0.5,
+        appearance_thresh=0.25,
+        mot20=False
+    )
+    return track_cfg
+
+
+def track_GT(ground_truth, track_iou=0.1, assert_iou=0.4, img_dir=None):
+    return track_GT_BOTSORT(ground_truth, track_iou=track_iou, assert_iou=assert_iou, img_dir=img_dir)
+
+
+def track_GT_BOTSORT(ground_truth, img_dir, track_iou=0.5, assert_iou=0.4):
+    from botsort.tracker.mc_bot_sort import BoTSORT
+    from sort import sort
+    track_cfg = get_track_config(new_track_thr=0, track_buffer=1, track_match_thr=track_iou)
+    tracker = BoTSORT(args=track_cfg)
+    annot_dict = get_annotations_dict(ground_truth)
+
+    for img_id in annot_dict.keys():
+        for ann in annot_dict[img_id]:
+            ann['score'] = 0.99
+        img = read_image(os.path.join(img_dir, [img['file_name'] for img in ground_truth['images'] if img['id'] == img_id][0]))
+        update_tracker_with_detection(tracker=tracker, det_per_img=annot_dict[img_id], img=img, iou_func=sort.iou_batch, assert_iou=assert_iou)
+
+    last_track_id = annot_dict[img_id][-1]['track_id']
+    return last_track_id
+
+
+def track_GT_SORT(ground_truth, track_iou=0.1, assert_iou=0.4, img_dir=None):
     from sort import sort
     annot_dict = get_annotations_dict(ground_truth)
     tracker = sort.Sort(max_age=1, min_hits=0, iou_threshold=track_iou)
@@ -1840,8 +1956,8 @@ def track_GT(ground_truth, track_iou=0.1, assert_iou=0.4):
 def evaluate_tracks(dataset, ground_truth):
     assert sorted([img['file_name'] for img in dataset['images']]) == sorted(
         [img['file_name'] for img in ground_truth['images']])
-    assert all(['track_id' in ann.keys() for ann in dataset['annotations']])
-    assert all(['track_id' in ann.keys() for ann in ground_truth['annotations']])
+    assert all(['track_id' in ann.keys() and ann['track_id'] is not None for ann in dataset['annotations']])
+    assert all(['track_id' in ann.keys() and ann['track_id'] is not None for ann in ground_truth['annotations']])
 
     gt_ann, dt_ann = {}, {}
     gt_tracks, dt_tracks = defaultdict(list), defaultdict(list)
@@ -1867,6 +1983,8 @@ def evaluate_tracks(dataset, ground_truth):
                 dt_id = gt_to_dt[gt_id]
                 dt_track_id = dt_id_to_track[dt_id]
                 gt_track_to_dt_track[gt_track_id].add(dt_track_id)
+
+        # keep just the longest detection track matching this ground truth
         if len(gt_track_to_dt_track[gt_track_id]):
             gt_track_to_dt_track[gt_track_id] = np.asarray(sorted(gt_track_to_dt_track[gt_track_id]))[
                 np.argmax([len(dt_tracks[dt_track_id]) for dt_track_id in sorted(gt_track_to_dt_track[gt_track_id])])]
@@ -2202,7 +2320,7 @@ def get_annotations_dict(dataset, conf_thr=None, only_preds=True, only_this_labe
                 (only_this_label is None or ann['category_id'] in cat_ids):
             annotations[ann['image_id']].append(ann)
 
-    return annotations
+    return dict(annotations)
 
 
 def get_category_names(dataset, lower_case=False, as_dict=False, strict=True):
@@ -2246,7 +2364,7 @@ def plot_bboxes(img, annotations, cat_dict=None, img_dir=None, palette='bright',
         return f'{ann["score"]:.2f}'
 
     if cat_dict is None:
-        cat_dict = {}
+        cat_dict = {ann['category_id']: ann['category_id'] for ann in annotations}
     if isinstance(palette, str):
         palette = (np.asarray(sns.color_palette(palette)) * 255).tolist()
     if isinstance(img, dict):
@@ -2255,7 +2373,7 @@ def plot_bboxes(img, annotations, cat_dict=None, img_dir=None, palette='bright',
     if annotations:
         bboxes = from_XYWH_to_XYXY([ann['bbox'] for ann in annotations]).astype(int)
         labels = np.asarray([
-            f"{f'{_get_id(ann)} ' if 'track_id' in ann else ''}{cat_dict.get(ann['category_id'], str(ann['category_id']))}{f' {_get_score(ann)}' if 'score' in ann else ''}"
+            f"{f'{_get_id(ann)} ' if 'track_id' in ann and ann['track_id'] is not None else ''}{cat_dict.get(ann['category_id'], str(ann['category_id']))}{f' {_get_score(ann)}' if 'score' in ann else ''}"
             for ann in annotations
         ])
         categories = [ann['category_id'] for ann in annotations]
@@ -2680,9 +2798,13 @@ def concat_crossval_results(result_files, assert_correct=True, only_preds=None):
 
 
 def assert_results_type(results):
-    assert isinstance(results, COCOResults) or \
-           (is_iterable(results, dict_allowed=False) and all(
-               [r is None or isinstance(r, COCOResults) for r in results])), results
+    assert is_result_type(results), results
+
+
+def is_result_type(results):
+    return isinstance(results, COCOResults) or \
+               (is_iterable(results, dict_allowed=False) and all(
+                   [r is None or isinstance(r, COCOResults) for r in results]))
 
 
 def clean_cached_results(results, clean_precision=False, clean_PRs=False, clean_stats=False,
@@ -2693,21 +2815,21 @@ def clean_cached_results(results, clean_precision=False, clean_PRs=False, clean_
                 for split in results[train_data][model][model_select]:
                     for seed in results[train_data][model][model_select][split]:
                         res = results[train_data][model][model_select][split][seed]
-                        assert_results_type(res)
-                        for r in (res if is_iterable(res) else [res]):
-                            if r is not None:
-                                if clean_precision:
-                                    r.precision = None
-                                if clean_PRs:
-                                    r.PRs = None
-                                if clean_stats:
-                                    r.stats = None
-                                if clean_eval:
-                                    r.eval = None
-                                if clean_detections:
-                                    r.dt_coco = None
-                                if clean_ground_truths:
-                                    r.gt_coco = None
+                        if is_result_type(res):
+                            for r in (res if is_iterable(res) else [res]):
+                                if r is not None:
+                                    if clean_precision:
+                                        r.precision = None
+                                    if clean_PRs:
+                                        r.PRs = None
+                                    if clean_stats:
+                                        r.stats = None
+                                    if clean_eval:
+                                        r.eval = None
+                                    if clean_detections:
+                                        r.dt_coco = None
+                                    if clean_ground_truths:
+                                        r.gt_coco = None
 
 
 def reload_results(results):
@@ -4777,7 +4899,7 @@ def predictions_to_df(dataset=None, pred_fn=None, categories=None, input_fn=None
                 ann['bbox'][3],
                 ann['bbox'][2] * ann['bbox'][3],
                 cats[ann['category_id']],
-                ann['score'],
+                ann['score'] if 'score' in ann else None,
                 # ann['id'],
                 img['file_name']
             ])

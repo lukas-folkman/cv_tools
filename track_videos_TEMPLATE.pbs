@@ -12,7 +12,7 @@
 # make sure you have the code
 cd ${HOME}/cv_tools/src || exit
 
-activate conda environment
+# activate conda environment
 source ${HOME}/miniconda3/etc/profile.d/conda.sh
 conda activate cv_tools
 

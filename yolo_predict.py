@@ -41,7 +41,7 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, video_input=No
             imgs = utils.read_images_from_dir(dir_name=dataset, basename_only=False)
             if len(imgs) == 0 and len(vids) != 0:
                 print(f'WARNING: Did not find any images in {dataset}, did you forget to specify "video_input=True"?')
-            dataset = sorted(imgs)
+            assert os.path.isdir(dataset)
 
     if isinstance(dataset, tuple):
         # This is implemented for pure predict and SORT tracking

@@ -151,8 +151,8 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, video_input=No
     predictions = []
     just_videos = []
     images = None if from_coco else []
-    short_video_ids = all([isinstance(source, str) and utils.is_video(source) for source in dataset]) and \
-                      len(dataset) == len(['.'.join(os.path.basename(source).split('.')[:-1]) for source in dataset])
+    # short_video_ids = all([isinstance(source, str) and utils.is_video(source) for source in dataset]) and \
+    #                   len(dataset) == len(['.'.join(os.path.basename(source).split('.')[:-1]) for source in dataset])
     for i, source in enumerate(dataset):
         if isinstance(source, str) and utils.is_video(source):
             assert video_input is None or video_input is True, f'Found {source} but video_input is {video_input}'
@@ -166,7 +166,7 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, video_input=No
             kwargs['save'] = save_pred_frames and (is_video or vis_threshold is None)
             outputs = model.predict(**kwargs)
         else:
-            kwargs['save'] = True
+            kwargs['save'] = save_pred_frames
             kwargs['verbose'] = False
             outputs = model.track(tracker=track_cfg_fn, **kwargs)
 
@@ -186,30 +186,30 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, video_input=No
                 track_ids = None
             sys.stdout.flush()
 
-            img_id = img_ids[i] if from_coco else \
-                f'{(".".join(os.path.basename(source).split(".")[:-1]) if short_video_ids else source) if is_video else ""}{"_" if is_video else ""}{(j + 1)}'
+            img_id = img_ids[i] if from_coco else None
+                # f'{(".".join(os.path.basename(source).split(".")[:-1]) if short_video_ids else source) if is_video else ""}{"_" if is_video else ""}{(j + 1)}'
             filename = outp.path
 
             if is_video:
                 n_digits_fn = 6 if stream else max(6, int(np.ceil(np.log10(len(outputs)))))
                 filename = f'{".".join(filename.split(".")[:-1])}.frame_{j:0{n_digits_fn}d}.jpg'
                 vid_predictions.append({
-                "image_id": img_id,
-                "instances": utils.instances_to_coco_json(
-                    outp, filename, track=track if track != utils.DUMMY_TRACK else None, track_ids=track_ids,
-                    one_based_cats=True, model_cat_names=model_cat_names, remap_cat_names=remap_cat_names)
-            })
+                    "image_id": img_id if img_id is not None else filename,
+                    "instances": utils.instances_to_coco_json(
+                        outp, filename, track=track if track != utils.DUMMY_TRACK else None, track_ids=track_ids,
+                        one_based_cats=True, model_cat_names=model_cat_names, remap_cat_names=remap_cat_names)
+                })
             else:
                 predictions.append({
-                    "image_id": img_id,
+                    "image_id": img_id if img_id is not None else filename,
                     "instances": utils.instances_to_coco_json(
-                        outp, img_id, track=track if track != utils.DUMMY_TRACK else None, track_ids=track_ids,
+                        outp, img_id if img_id is not None else filename, track=track if track != utils.DUMMY_TRACK else None, track_ids=track_ids,
                         one_based_cats=True, model_cat_names=model_cat_names, remap_cat_names=remap_cat_names)
                 })
 
             if images is not None:
                 images.append(dict(
-                    id=img_id,
+                    id=img_id if img_id is not None else filename,
                     file_name=filename,
                 ))
 

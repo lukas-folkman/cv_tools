@@ -12,7 +12,7 @@
 # make sure you have the code
 cd ${HOME}/cv_tools/src || exit
 
-# activate conda environment
+activate conda environment
 source ${HOME}/miniconda3/etc/profile.d/conda.sh
 conda activate cv_tools
 
@@ -22,8 +22,8 @@ RESULTS_DIR="../results"
 MODEL_DIR="../models"
 
 # these are the model weights files
-YOLO_MODEL="${MODEL_DIR}/yolo8_2024.pt"
-DT2_MODEL="${MODEL_DIR}/frcnn_2024.pt"
+YOLO_MODEL="${MODEL_DIR}/yolo8.LFQC.e100.final.seed1.pt"
+DT2_MODEL="${MODEL_DIR}/dt2_frcnn.LFQC.e50.final.weight3.lr_gamma0.5.seed1.pt"
 
 # this file specifies the inputs - one per line
 # each line can be either a directory with videos (mp4 files) or a video file (mp4)
@@ -60,9 +60,6 @@ do
       else
         model="UNDEFINED"
       fi
-
-      # only for debugging locally
-      # conda activate ${model}
 
       # create the output directory
       OUT_DIR="${RESULTS_DIR}/${subdir}/${model}"

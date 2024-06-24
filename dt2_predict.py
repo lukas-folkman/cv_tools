@@ -157,18 +157,24 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, video_inpu
         if output_fn is None:
             output_fn = os.path.join(output_dir, 'predictions.json')
         assert not evaluate
-        if track:
-            assert new_track_thr is None or new_track_thr <= 1
-            from botsort.tracker.mc_bot_sort import BoTSORT
-            track_cfg = utils.get_track_config(
-                track_high_thr=track_high_thr, track_low_thr=track_low_thr, new_track_thr=new_track_thr,
-                track_buffer=track_buffer, track_match_thr=track_match_thr)
-            tracker = BoTSORT(args=track_cfg)
 
-        predictor = DefaultPredictor(cfg)
-        assert predictor.input_format == utils.BGR_FORMAT
+        def get_fresh_predictor():
+            if track:
+                from botsort.tracker.mc_bot_sort import BoTSORT
+                from sort import sort
+                track_cfg = utils.get_track_config(
+                    track_high_thr=track_high_thr, track_low_thr=track_low_thr, new_track_thr=new_track_thr,
+                    track_buffer=track_buffer, track_match_thr=track_match_thr)
+                tracker = BoTSORT(args=track_cfg)
+            else:
+                tracker = None
+
+            predictor = DefaultPredictor(cfg)
+            assert predictor.input_format == utils.BGR_FORMAT
+            return predictor, tracker
 
         if not video_input:
+            predictor, tracker = get_fresh_predictor()
             # os.makedirs(os.path.join(output_dir, 'without_nms'), exist_ok=True)
             for inp_fn in dataset:
                 # use PIL, to be consistent with evaluation
@@ -211,6 +217,7 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, video_inpu
         else:
             # video_input
             for inp_fn in dataset:
+                predictor, tracker = get_fresh_predictor()
                 print(inp_fn)
                 vid_predictions = []
                 assert os.path.isfile(inp_fn)

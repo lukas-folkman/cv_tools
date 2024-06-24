@@ -161,7 +161,6 @@ def dt2_predict(cfg, weights_fn, dataset, output_dir, output_fn=None, video_inpu
         def get_fresh_predictor():
             if track:
                 from botsort.tracker.mc_bot_sort import BoTSORT
-                from sort import sort
                 track_cfg = utils.get_track_config(
                     track_high_thr=track_high_thr, track_low_thr=track_low_thr, new_track_thr=new_track_thr,
                     track_buffer=track_buffer, track_match_thr=track_match_thr)

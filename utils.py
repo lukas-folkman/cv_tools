@@ -1384,7 +1384,7 @@ def create_coco_dataset(*imgs, cat_names=None, license_id=None):
             )
 
     if cat_names is not None:
-        dataset['categories'] = [dict(id=i + 1, name=cat, supercategory='none') for i, cat in enumerate(cat_names)]
+        dataset['categories'] = [dict(id=i + 1, name=cat, supercategory='') for i, cat in enumerate(cat_names)]
 
     return dataset
 
@@ -2267,8 +2267,9 @@ def get_annotation_hash_ids(dataset):
     hash_ids = []
     img_to_anns = get_annotations_dict(dataset)
     for img in dataset['images']:
-        anns = img_to_anns[img['id']]
-        hash_ids.extend([f'{img["file_name"]}_{"_".join(map(str, ann["bbox"]))}' for ann in anns])
+        if img['id'] in img_to_anns:
+            anns = img_to_anns[img['id']]
+            hash_ids.extend([f'{img["file_name"]}_{"_".join(map(str, ann["bbox"]))}' for ann in anns])
     return hash_ids
 
 
@@ -3201,6 +3202,13 @@ def prepare_datasets(data_json_fns, data_img_dirs, test_json_fns, test_img_dirs,
         apply_data_filters(extra_train_dataset, data_filters, n_folds=n_folds, only_global=True,
                            masked_bboxes_per_image=masked_bboxes_per_image)
         image_root = set_common_image_root((dataset, extra_train_dataset), (data_img_dir, extra_train_img_dir))
+    elif extra_train_img_dirs and extra_train_img_dirs != data_img_dirs:
+        assert len(extra_train_img_dirs) == 1
+        assert os.path.isdir(extra_train_img_dirs[0])
+        extra_train_img_dir = extra_train_img_dirs[0]
+        extra_train_dataset = create_coco_dataset(extra_train_img_dir, cat_names=test_cat_names)
+        cat_names = copy.copy(test_cat_names)
+        image_root = set_common_image_root((dataset, extra_train_dataset), (data_img_dir, extra_train_img_dir))
     else:
         extra_train_dataset = None
         cat_names = copy.copy(test_cat_names)
@@ -3948,7 +3956,9 @@ def merge_datasets(*datasets, check_licenses=True, check_optional_fields=True, d
                         lcs_id2 = new_item.get('license')
                         lcs_name1 = get_license_name_from_id(dataset, lcs_id1)
                         lcs_name2 = get_license_name_from_id(new_dataset, lcs_id2)
-                        assert (lcs_id1 is None and lcs_id2 is None) or lcs_name1 == lcs_name2, \
+                        assert (lcs_id1 is None and lcs_id2 is None) or lcs_name1 == lcs_name2 or \
+                               ((lcs_name1 is None or lcs_name1.lower() in ['', 'none']) and
+                                (lcs_name2 is None or lcs_name2.lower() in ['', 'none'])), \
                             f'{group} {item[equal_field]} with different license names: {lcs_name1} vs. {lcs_name2}'
                     if check_optional_fields:
                         # I would expect also these to match (or be undefined)

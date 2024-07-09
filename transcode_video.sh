@@ -18,6 +18,10 @@ else
   do
     output=`echo $input | sed 's/\.[A-Za-z0-9]*$/.mp4/'`
     if [[ -f ${output} ]]; then
+      output=`echo $input | sed 's/\.[A-Za-z0-9]*$/_transcoded.mp4/'`
+    fi
+
+    if [[ -f ${output} ]]; then
       echo "ERROR: ${output} already exists"
     else
       echo "INFO: Creating ${output}"

@@ -4898,25 +4898,27 @@ def predictions_to_df(dataset=None, pred_fn=None, categories=None, input_fn=None
     cats = get_category_ids(dataset, as_dict=True)
     anns = get_annotations_dict(dataset)
     for img in dataset['images']:
-        for ann in anns[img['id']]:
-            records.append([
-                os.path.basename(img['file_name'].split(split_words[0])[0]),
-                ann['track_id'] if 'track_id' in ann else None,
-                img['file_name'].split(split_words[0])[1].split(split_words[1])[0],
-                ann['bbox'][0],
-                ann['bbox'][1],
-                ann['bbox'][2],
-                ann['bbox'][3],
-                ann['bbox'][2] * ann['bbox'][3],
-                cats[ann['category_id']],
-                ann['score'] if 'score' in ann else None,
-                # ann['id'],
-                img['file_name']
-            ])
+        if img['id'] in anns:
+            for ann in anns[img['id']]:
+                records.append([
+                    os.path.basename(img['file_name'].split(split_words[0])[0]),
+                    ann['track_id'] if 'track_id' in ann else None,
+                    img['file_name'].split(split_words[0])[1].split(split_words[1])[0],
+                    ann['bbox'][0],
+                    ann['bbox'][1],
+                    ann['bbox'][2],
+                    ann['bbox'][3],
+                    ann['bbox'][2] * ann['bbox'][3],
+                    cats[ann['category_id']],
+                    ann['score'] if 'score' in ann else None,
+                    # ann['id'],
+                    img['file_name']
+                ])
 
     df = pd.DataFrame.from_records(
         records,
-        columns=['video_id', 'fish_id', 'frame_id', 'x1', 'y1', 'width', 'height', 'area', 'label', 'score', 'filename']) # 'box_id',
+        columns=['video_id', 'fish_id', 'frame_id', 'x1', 'y1', 'width', 'height', 'area', 'label', 'score', 'filename']
+    )  # 'box_id'
     df['video_id'] = df['video_id'].astype(str)
     df['frame_id'] = df['frame_id'].astype(frame_id_type)
     df['fish_id'] = df['fish_id'].astype(fish_id_type)

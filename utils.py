@@ -333,9 +333,9 @@ class COCOResults:
             scores = torch.tensor([ann['score'] for ann in self.dt_coco])
             assert scores.shape == (len(self.dt_coco),), scores.shape
             idx = nms(boxes=boxes, scores=scores, iou_threshold=self.class_agnostic_nms)
-            print('dt_coco before NMS', len(self.dt_coco))
+            # print('dt_coco before NMS', len(self.dt_coco))
             self.dt_coco = [ann for i, ann in enumerate(self.dt_coco) if i in idx]
-            print('dt_coco after NMS', len(self.dt_coco))
+            # print('dt_coco after NMS', len(self.dt_coco))
 
         self.index_dt_coco()
 
@@ -1966,15 +1966,22 @@ def evaluate_tracks(dataset, ground_truth):
     gt_track_to_dt_track = {}
 
     for ann in ground_truth['annotations']:
+        assert ann['category_id'] in [1, 2], ann
         gt_ann[ann['id']] = ann
         gt_tracks[ann['track_id']].append(ann['id'])
 
+    n_DJs = 0
     for ann in dataset['annotations']:
+        if ann['category_id'] not in [1, 2]:
+            n_DJs += 1
         dt_ann[ann['id']] = ann
         dt_tracks[ann['track_id']].append(ann['id'])
         dt_id_to_track[ann['id']] = ann['track_id']
         assert ann['gt_id'] not in gt_to_dt
         gt_to_dt[ann['gt_id']] = ann['id']
+
+    if n_DJs != 0:
+        print(f'WARNING: There were {n_DJs} DJs among detections, but no DJs among ground truth')
 
     for gt_track_id in gt_tracks:
         gt_track_to_dt_track[gt_track_id] = set([])
@@ -1996,54 +2003,45 @@ def evaluate_tracks(dataset, ground_truth):
     frames_matched = {gt_track_id: (len(dt_tracks[gt_track_to_dt_track[gt_track_id]]) / len(
         gt_tracks[gt_track_id])) if gt_track_id in gt_track_to_dt_track else 0 for gt_track_id in gt_tracks}
 
-    Q2, TPR, TNR = {}, {}, {}
+    Q2, TPR, TNR, MD = {}, {}, {}, {}
     gt_ts, dt_ts = {}, {}
     for gt_track_id in gt_tracks:
-        Q2[gt_track_id], TPR[gt_track_id], TNR[gt_track_id] = [], [], []
-        gt_ts[f'gt_{gt_track_id}'], dt_ts[f'gt_{gt_track_id}'] = [], []
+        Q2[gt_track_id], TPR[gt_track_id], TNR[gt_track_id], MD[gt_track_id] = [], [], [], []
+        gt_ts[gt_track_id], dt_ts[gt_track_id] = [], []
         if gt_track_id in gt_track_to_dt_track:
             dt_track_id = gt_track_to_dt_track[gt_track_id]
             for gt_id in gt_tracks[gt_track_id]:
-                # gt_ts[f'gt_{gt_track_id}'].append(gt_ann[gt_id]['category_id'])
-                gt_ts[f'gt_{gt_track_id}'].append(gt_ann[gt_id])
+                gt_ts[gt_track_id].append(gt_ann[gt_id]['category_id'])
                 if gt_id in gt_to_dt:
                     dt_id = gt_to_dt[gt_id]
                     if dt_id in dt_tracks[dt_track_id]:
-                        # dt_ts[f'gt_{gt_track_id}'].append(dt_ann[dt_id]['category_id'])
-                        dt_ts[f'gt_{gt_track_id}'].append(dt_ann[dt_id])
-                        assert gt_ann[gt_id]['category_id'] in [1, 2]
-                        assert dt_ann[dt_id]['category_id'] in [1, 2]
+                        dt_ts[gt_track_id].append(dt_ann[dt_id]['category_id'])
+                        MD[gt_track_id].append(False)
                         Q2[gt_track_id].append(gt_ann[gt_id]['category_id'] == dt_ann[dt_id]['category_id'])
                         if gt_ann[gt_id]['category_id'] == 1:
                             TPR[gt_track_id].append(gt_ann[gt_id]['category_id'] == dt_ann[dt_id]['category_id'])
                         if gt_ann[gt_id]['category_id'] == 2:
                             TNR[gt_track_id].append(gt_ann[gt_id]['category_id'] == dt_ann[dt_id]['category_id'])
                     else:
-                        # print('Missing dt box in dt track')
-                        Q2[gt_track_id].append(False)
-                        if gt_ann[gt_id]['category_id'] == 1:
-                            TPR[gt_track_id].append(False)
-                        if gt_ann[gt_id]['category_id'] == 2:
-                            TNR[gt_track_id].append(False)
-                        dt_ts[f'gt_{gt_track_id}'].append(None)
+                        MD[gt_track_id].append(True)
+                        dt_ts[gt_track_id].append(None)
                 else:
-                    # print('Missing dt box match')
-                    Q2[gt_track_id].append(False)
-                    if gt_ann[gt_id]['category_id'] == 1:
-                        TPR[gt_track_id].append(False)
-                    if gt_ann[gt_id]['category_id'] == 2:
-                        TNR[gt_track_id].append(False)
-                    dt_ts[f'gt_{gt_track_id}'].append(None)
+                    MD[gt_track_id].append(True)
+                    dt_ts[gt_track_id].append(None)
         else:
-            # print('Missing dt fish')
-            assert False
-            Q2[gt_track_id] = [False] * len(gt_tracks[gt_track_id])
-            # TPR = ?
-            # TNR = ?
-            gt_ts[f'gt_{gt_track_id}'] = [gt_ann[gt_id]['category_id'] for gt_id in gt_tracks[gt_track_id]]
-            dt_ts[f'gt_{gt_track_id}'] = [None] * len(gt_tracks[gt_track_id])
+            MD[gt_track_id] = None
+            Q2[gt_track_id] = None
+            TPR[gt_track_id] = None
+            TNR[gt_track_id] = None
+            gt_ts[gt_track_id] = [gt_ann[gt_id]['category_id'] for gt_id in gt_tracks[gt_track_id]]
+            dt_ts[gt_track_id] = [None] * len(gt_tracks[gt_track_id])
+            print(f'WARNING: Test fish {gt_track_id} was not detected at all')
+            assert False, f'Test fish {gt_track_id} was not detected at all, that is quite unexpected, yet plausible'
 
-        assert len(gt_ts[f'gt_{gt_track_id}']) == len(dt_ts[f'gt_{gt_track_id}'])
+        assert len(gt_ts[gt_track_id]) == len(dt_ts[gt_track_id])
+        assert len(gt_ts[gt_track_id]) == len(MD[gt_track_id])
+        MD[gt_track_id] = np.sum(MD[gt_track_id]) / len(MD[gt_track_id])
+        assert abs((1 - MD[gt_track_id]) - frames_matched[gt_track_id]) < 1e-6
         Q2[gt_track_id] = np.sum(Q2[gt_track_id]) / len(Q2[gt_track_id])
         TPR[gt_track_id] = (np.sum(TPR[gt_track_id]) / len(TPR[gt_track_id])) if len(TPR[gt_track_id]) != 0 else np.nan
         TNR[gt_track_id] = (np.sum(TNR[gt_track_id]) / len(TNR[gt_track_id])) if len(TNR[gt_track_id]) != 0 else np.nan

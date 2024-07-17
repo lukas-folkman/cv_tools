@@ -1773,7 +1773,7 @@ def read_imgs_and_resize(dataset, img_dir, resize, group_splitter='_', n_parts=1
     return img_arr, np.asarray(metadata)
 
 
-def select_fish_from_GT(dataset, ground_truth, iou_thr=0.5, allow_missing_dt_frames=False, fix_DJs=False,
+def select_fish_from_GT(dataset, ground_truth, iou_thr=0.33, allow_missing_dt_frames=False, fix_DJs=False,
                         remove_unmatched_dt_boxes=True):
 
     # SUBSET TO ONLY GROUND TRUTH IMAGES

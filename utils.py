@@ -820,8 +820,11 @@ def plot_PR_curve(precision, recall=None, catIds=None, all_catIds=None, average_
                   f1_format="$F_1={:0.1f}$",
                   f1_legend=None, f1_fontsize=None):
     import seaborn as sns
+    if isinstance(palette, str):
+        palette = sns.color_palette(palette=palette)
+    n_colors = len(palette)
     if color is not None and isinstance(color, int):
-        color = sns.color_palette(palette=palette)[color % 10]
+        color = palette[color % n_colors]
     if f1_values is None:
         f1_values = [0.6, 0.7, 0.8, 0.9]
 
@@ -857,7 +860,7 @@ def plot_PR_curve(precision, recall=None, catIds=None, all_catIds=None, average_
             else:
                 cat_info = f' category: {cat_id}'
             ax = sns.lineplot(
-                x=recall, y=precision[:, k], ax=ax, ls=ls, color=color,
+                x=recall, y=precision[:, k], ax=ax, ls=ls, color=color if color is not None else palette[k % n_colors],
                 label=f'{label if label is not None else ""}{cat_info}'
             )
             # ax = sns.lineplot(x=recall, y=scores[k], ax=ax)
@@ -2011,11 +2014,11 @@ def evaluate_tracks(dataset, ground_truth):
         if gt_track_id in gt_track_to_dt_track:
             dt_track_id = gt_track_to_dt_track[gt_track_id]
             for gt_id in gt_tracks[gt_track_id]:
-                gt_ts[gt_track_id].append(gt_ann[gt_id]['category_id'])
+                gt_ts[gt_track_id].append(gt_ann[gt_id])
                 if gt_id in gt_to_dt:
                     dt_id = gt_to_dt[gt_id]
                     if dt_id in dt_tracks[dt_track_id]:
-                        dt_ts[gt_track_id].append(dt_ann[dt_id]['category_id'])
+                        dt_ts[gt_track_id].append(dt_ann[dt_id])
                         MD[gt_track_id].append(False)
                         Q2[gt_track_id].append(gt_ann[gt_id]['category_id'] == dt_ann[dt_id]['category_id'])
                         if gt_ann[gt_id]['category_id'] == 1:
@@ -2033,7 +2036,7 @@ def evaluate_tracks(dataset, ground_truth):
             Q2[gt_track_id] = None
             TPR[gt_track_id] = None
             TNR[gt_track_id] = None
-            gt_ts[gt_track_id] = [gt_ann[gt_id]['category_id'] for gt_id in gt_tracks[gt_track_id]]
+            gt_ts[gt_track_id] = [gt_ann[gt_id] for gt_id in gt_tracks[gt_track_id]]
             dt_ts[gt_track_id] = [None] * len(gt_tracks[gt_track_id])
             print(f'WARNING: Test fish {gt_track_id} was not detected at all')
             assert False, f'Test fish {gt_track_id} was not detected at all, that is quite unexpected, yet plausible'

@@ -1738,7 +1738,7 @@ def read_json(fn, assert_correct=True, only_preds=False, only_imgs=False, add_mi
             cats = get_category_ids(dataset, as_dict=True, strict=assert_correct)
             print('categories:', cats.values())
             if not only_imgs:
-                print_categories_counts(dataset, assert_correct=assert_correct)
+                categories_counts(dataset, assert_correct=assert_correct, verbose=True)
     return dataset
 
 
@@ -2069,17 +2069,20 @@ def read_CVAT_json(task_dir):
             s['label']
 
 
-def print_categories_counts(dataset, assert_correct=True):
+def categories_counts(dataset, assert_correct=True, verbose=True):
     cats = get_category_ids(dataset, as_dict=True, strict=assert_correct)
     n_per_cat = {cat_id: len([ann for ann in dataset['annotations'] if ann['category_id'] == cat_id]) for cat_id in
                  cats.keys()}
     # idx_max = list(n_per_cat.keys())[(np.argmax(n_per_cat.values()))]
+    ratios = {}
     for cat_id in cats.keys():
         try:
-            ratio = n_per_cat[cat_id] / len(dataset['annotations'])
+            ratios[cat_id] = n_per_cat[cat_id] / len(dataset['annotations'])
         except:
-            ratio = 'undefined'
-        print(f"{cats[cat_id]}: {n_per_cat[cat_id]} (ratio: {ratio})")
+            ratios[cat_id] = None
+        if verbose:
+            print(f"{cats[cat_id]}: {n_per_cat[cat_id]} (ratio: {ratios[cat_id]})")
+    return cats, n_per_cat, ratios
 
 
 def save_json(dataset, fn, assert_correct=True, only_preds=False, only_imgs=False, indent=2, sort_keys=False,

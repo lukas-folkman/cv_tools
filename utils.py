@@ -2003,15 +2003,16 @@ def evaluate_tracks(dataset, ground_truth):
 
     fish_tracked = len(gt_track_to_dt_track) / len(gt_tracks)
 
-    frames_matched = {gt_track_id: (len(dt_tracks[gt_track_to_dt_track[gt_track_id]]) / len(
-        gt_tracks[gt_track_id])) if gt_track_id in gt_track_to_dt_track else 0 for gt_track_id in gt_tracks}
+    for gt_track_id in gt_tracks:
+        if gt_track_id in gt_track_to_dt_track and len(dt_tracks[gt_track_to_dt_track[gt_track_id]]) > len(gt_tracks[gt_track_id]):
+            print(f'WARNING: Test fish {gt_track_id} has more detections ({len(dt_tracks[gt_track_to_dt_track[gt_track_id]])}) than ground truth ({len(gt_tracks[gt_track_id])})')
 
     Q2, TPR, TNR, MD = {}, {}, {}, {}
     gt_ts, dt_ts = {}, {}
     for gt_track_id in gt_tracks:
-        Q2[gt_track_id], TPR[gt_track_id], TNR[gt_track_id], MD[gt_track_id] = [], [], [], []
-        gt_ts[gt_track_id], dt_ts[gt_track_id] = [], []
         if gt_track_id in gt_track_to_dt_track:
+            Q2[gt_track_id], TPR[gt_track_id], TNR[gt_track_id], MD[gt_track_id] = [], [], [], []
+            gt_ts[gt_track_id], dt_ts[gt_track_id] = [], []
             dt_track_id = gt_track_to_dt_track[gt_track_id]
             for gt_id in gt_tracks[gt_track_id]:
                 gt_ts[gt_track_id].append(gt_ann[gt_id])
@@ -2031,25 +2032,24 @@ def evaluate_tracks(dataset, ground_truth):
                 else:
                     MD[gt_track_id].append(True)
                     dt_ts[gt_track_id].append(None)
+
+            assert len(gt_ts[gt_track_id]) == len(MD[gt_track_id])
+            MD[gt_track_id] = np.sum(MD[gt_track_id]) / len(MD[gt_track_id])
+            Q2[gt_track_id] = np.sum(Q2[gt_track_id]) / len(Q2[gt_track_id])
+            TPR[gt_track_id] = (np.sum(TPR[gt_track_id]) / len(TPR[gt_track_id])) if len(TPR[gt_track_id]) != 0 else np.nan
+            TNR[gt_track_id] = (np.sum(TNR[gt_track_id]) / len(TNR[gt_track_id])) if len(TNR[gt_track_id]) != 0 else np.nan
         else:
-            MD[gt_track_id] = None
-            Q2[gt_track_id] = None
-            TPR[gt_track_id] = None
-            TNR[gt_track_id] = None
+            MD[gt_track_id] = 1.0
+            Q2[gt_track_id] = 0.0
+            TPR[gt_track_id] = 0.0
+            TNR[gt_track_id] = 0.0
             gt_ts[gt_track_id] = [gt_ann[gt_id] for gt_id in gt_tracks[gt_track_id]]
             dt_ts[gt_track_id] = [None] * len(gt_tracks[gt_track_id])
             print(f'WARNING: Test fish {gt_track_id} was not detected at all')
-            assert False, f'Test fish {gt_track_id} was not detected at all, that is quite unexpected, yet plausible'
 
         assert len(gt_ts[gt_track_id]) == len(dt_ts[gt_track_id])
-        assert len(gt_ts[gt_track_id]) == len(MD[gt_track_id])
-        MD[gt_track_id] = np.sum(MD[gt_track_id]) / len(MD[gt_track_id])
-        assert abs((1 - MD[gt_track_id]) - frames_matched[gt_track_id]) < 1e-6
-        Q2[gt_track_id] = np.sum(Q2[gt_track_id]) / len(Q2[gt_track_id])
-        TPR[gt_track_id] = (np.sum(TPR[gt_track_id]) / len(TPR[gt_track_id])) if len(TPR[gt_track_id]) != 0 else np.nan
-        TNR[gt_track_id] = (np.sum(TNR[gt_track_id]) / len(TNR[gt_track_id])) if len(TNR[gt_track_id]) != 0 else np.nan
 
-    return fish_tracked, frames_matched, Q2, TPR, TNR, gt_ts, dt_ts
+    return fish_tracked, MD, Q2, TPR, TNR, gt_ts, dt_ts
 
 
 def read_CVAT_json(task_dir):
@@ -3086,7 +3086,7 @@ def read_all_datasets(data_json_fns, data_img_dirs=None, sort_cats=False, quick_
                 if cc['name'].lower() == 'delete':
                     cc['name'] = 'delete'
 
-        dataset = merge_datasets(*all_datasets)
+        dataset = merge_datasets(*all_datasets, verbose=verbose)
     else:
         dataset = read_json(data_json_fns[0], verbose=verbose)
         if data_img_dirs is not None:
@@ -3891,7 +3891,7 @@ def get_license_name_from_id(dataset, lcs_id):
     return lcs_name
 
 
-def merge_datasets(*datasets, check_licenses=True, check_optional_fields=True, duplicate_images=False):
+def merge_datasets(*datasets, check_licenses=True, check_optional_fields=True, duplicate_images=False, verbose=True):
     """
     Merges several COCO dataset into one dataset containing all images and annotations. To do so, it will issue
     new IDs whenever necessary.
@@ -3915,7 +3915,8 @@ def merge_datasets(*datasets, check_licenses=True, check_optional_fields=True, d
         if info is None:
             info = copy.copy(dataset.get('info'))
             if info is not None:
-                print(f'INFO: using first available "info": {info}')
+                if verbose:
+                    print(f'INFO: using first available "info": {info}')
                 new_dataset['info'] = info
         # merge all category and license names and check if it is safe to be case-insensitive
         for group in case_check_union:
@@ -4005,8 +4006,8 @@ def merge_datasets(*datasets, check_licenses=True, check_optional_fields=True, d
                     new_ids_map[id_field][dataset_id][item['id']] = new_item['id']
 
         new_dataset[group] = list(merged_items.values())
-        print(
-            f'INFO: merged {group}: {f"{new_dataset[group]}" if group in ["licenses", "categories"] else f"{len(new_dataset[group])} record(s)"}')
+        if verbose:
+            print(f'INFO: merged {group}: {f"{new_dataset[group]}" if group in ["licenses", "categories"] else f"{len(new_dataset[group])} record(s)"}')
 
         # if there were no licenses, remove the field
         if group == 'licenses' and new_dataset[group] == []:

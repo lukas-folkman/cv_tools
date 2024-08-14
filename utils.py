@@ -1685,7 +1685,7 @@ def file_or_gzip_exists(fn):
 
 def read_json(fn, assert_correct=True, only_preds=False, only_imgs=False, add_missing_areas=False, fill_in_images=False,
               fix_zero_ann_ids=False, allow_zero_area_boxes=False, fix_to_basenames=False, fix_image_ids=False,
-              change_to_zero_based_frames=False, verbose=True):
+              change_to_zero_based_frames=False, fps_mod=None, verbose=True):
     fn, open_func = open_maybe_gzipped(fn)
     with open_func(fn, mode='rt', encoding='UTF-8') as f:
         dataset = json.load(f)
@@ -1726,6 +1726,16 @@ def read_json(fn, assert_correct=True, only_preds=False, only_imgs=False, add_mi
                 ann['image_id'] = new_file_name
             img['id'] = new_file_name
             img['file_name'] = new_file_name
+    if fps_mod is not None and fps_mod != 1:
+        imgs = []
+        for img in dataset['images']:
+            fn = img['file_name']
+            assert fn.count('.frame_') == 1
+            assert fn.lower().endswith('.jpg') or fn.lower().endswith('.png')
+            if int(fn.split('.frame_')[1][:-4]) % fps_mod == 0:
+                imgs.append(img)
+        dataset['images'] = imgs
+        dataset['annotations'] = filter_annotations_with_images(dataset)
     if assert_correct:
         assert_dataset_correct(dataset, only_preds=only_preds, only_imgs=only_imgs,
                                allow_zero_area_boxes=allow_zero_area_boxes)
@@ -1756,10 +1766,10 @@ def read_tracking_json(fn, assert_correct=False, verbose=False, categories='vent
         fill_in_areas(dataset['annotations'], fill_in_ids=fill_in_ids, fill_in_iscrowd=fill_in_iscrowd)
     if fix_width_height_by_loading or fix_width is not None or fix_height is not None:
         fill_in_width_height(dataset['images'], load=fix_width_height_by_loading, h=fix_height, w=fix_width)
-    if fix_track_ids:
-        for ann in dataset['annotations']:
-            video = ann['image_id'].split('.frame_')[0]
-            # ann['track_id'] = f"{video}_{ann['track_id']}"
+    # if fix_track_ids:
+    #     for ann in dataset['annotations']:
+    #         video = ann['image_id'].split('.frame_')[0]
+    #         ann['track_id'] = f"{video}_{ann['track_id']}"
 
     return dataset
 
@@ -1777,7 +1787,7 @@ def read_imgs_and_resize(dataset, img_dir, resize, group_splitter='_', n_parts=1
 
 
 def select_fish_from_GT(dataset, ground_truth, iou_thr=0.33, allow_missing_dt_frames=False, fix_DJs=False,
-                        remove_unmatched_dt_boxes=True):
+                        remove_unmatched_dt_boxes=True, verbose=True):
 
     # SUBSET TO ONLY GROUND TRUTH IMAGES
     gt_img_fns = [img['file_name'] for img in ground_truth['images']]
@@ -1788,14 +1798,16 @@ def select_fish_from_GT(dataset, ground_truth, iou_thr=0.33, allow_missing_dt_fr
     dataset['images'] = [img for img in dataset['images'] if img['file_name'] in gt_img_fns]
     if len(set(gt_img_fns).difference(dt_img_fns)) != 0:
         assert allow_missing_dt_frames
-        print('WARNING: some frames have no detections and are missing:', set(gt_img_fns).difference(dt_img_fns))
-        print(len(dataset['images']))
+        if verbose:
+            print('WARNING: some frames have no detections and are missing:', set(gt_img_fns).difference(dt_img_fns))
+            print(len(dataset['images']))
         add = [img for img in ground_truth['images'] if img['file_name'] in set(gt_img_fns).difference(dt_img_fns)]
         for img in add:
             img.pop('license')
         dataset['images'].extend(add)
-        print(add)
-        print(len(dataset['images']))
+        if verbose:
+            print(add)
+            print(len(dataset['images']))
     assert set([img['file_name'] for img in dataset['images']]) == set(gt_img_fns)
 
     # SUBSET TO ANNOTATIONS IN THE GROUND TRUTH IMAGES
@@ -1832,7 +1844,8 @@ def select_fish_from_GT(dataset, ground_truth, iou_thr=0.33, allow_missing_dt_fr
             ann['gt_id'] = dt_to_gt[ann['id']]
         if fix_DJs:
             if ann['category_id'] not in [1, 2]:
-                print('FIXING DJ TO OPEN')
+                if verbose:
+                    print('FIXING DJ TO OPEN')
                 assert ann['category_id'] == 3, ann
                 ann['category_id'] = 1
 
@@ -4875,7 +4888,7 @@ def get_size(obj, seen=None):
 
 def predictions_to_df(dataset=None, pred_fn=None, categories=None, input_fn=None, split_words=['.frame_', '.'],
                       frame_id_type=pd.Int64Dtype(), fish_id_type=pd.Int64Dtype(), box_id_type=pd.Int64Dtype(),
-                      all_tracks_start_at_one=True):
+                      all_tracks_start_at_one=True, fix_fps_mod=None):
     if dataset is None:
         if input_fn is not None:
             dataset = read_json(input_fn)
@@ -4932,6 +4945,14 @@ def predictions_to_df(dataset=None, pred_fn=None, categories=None, input_fn=None
 
     if all_tracks_start_at_one:
         df['fish_id'] -= (df['fish_id'].min() - 1)
+
+    if fix_fps_mod is not None and fix_fps_mod != 1:
+        for video_id in df['video_id'].unique():
+            video_mask = df['video_id'] == video_id
+            idx = np.arange(df.loc[video_mask, 'frame_id'].min(), df.loc[video_mask, 'frame_id'].max() + 1, fix_fps_mod, dtype=int)
+            assert df.loc[video_mask, 'frame_id'].values.isin(idx).all()
+            df.loc[video_mask, 'frame_id'] = df.loc[video_mask, 'frame_id'].map(
+                {i: j for i, j in zip(idx, np.arange(len(idx)))})
 
     return df
 

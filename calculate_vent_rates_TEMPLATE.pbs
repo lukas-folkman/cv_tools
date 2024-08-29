@@ -1,0 +1,59 @@
+#!/bin/bash
+
+#PBS -N vent_rates
+#PBS -M YOUR_EMAIL
+#PBS -m bea
+#PBS -l ncpus=1
+#PBS -l ngpus=1
+#PBS -l mem=4gb
+#PBS -l walltime=100:00:00
+#PBS -q workq
+
+# make sure you have the code
+#cd ${HOME}/cv_tools/src || exit
+
+# activate conda environment
+source ${HOME}/miniconda3/etc/profile.d/conda.sh
+conda activate cv_tools
+
+# results location
+RESULTS_DIR="../results"
+
+# this file specifies the inputs - one per line
+# each line can be either a directory with JSON/CSV tracking results or a single JSON/CSV tracking results file
+# note that all files must be somewhere within ../results
+# if the location of your JSON/CSV file is "../results/XYZ/ABC/video.csv", then include a line "XYZ/ABC/video.csv"
+# if the directory of your JSON/CSV files is "../data/XYZ/ABC", then include a line "XYZ/ABC"
+RESULTS_LIST="RESULTS_LIST.txt"
+
+# read all lines from the RESULTS_LIST file
+while read -r csv_json_path
+do
+  if [[ -n "${csv_json_path}" ]]; then
+
+    # check if the input line is a directory or a single file
+    if [[ -d "${RESULTS_DIR}/${csv_json_path}" ]]; then
+        OUT_DIR="${RESULTS_DIR}/${csv_json_path}"
+      elif [[ -f "${RESULTS_DIR}/${csv_json_path}" ]]; then
+        OUT_DIR="${RESULTS_DIR}/$(dirname "${csv_json_path}")"
+      else
+        echo "ERROR: ${RESULTS_DIR}/${csv_json_path} does not exist, skipping"
+        continue
+    fi
+
+    echo "INPUT: ${RESULTS_DIR}/${csv_json_path}"
+    echo "OUTPUT: ${OUT_DIR}"
+
+    # finally, detect and track
+    python calc_vent_rate.py \
+     --input_fn "${RESULTS_DIR}/${csv_json_path}" \
+     --output_dir "${OUT_DIR}" \
+     --model_cat_names "open" "closed" "DJ" \
+     --fps 30 \
+     --drop_DJ_fraction 0.5 \
+     --n_impute_randomly 1 \
+     --fix_early_open_within_closed 1 \
+     --singleton_size 1 \
+     --ram_to_buccal_ratio 2 >> "${OUT_DIR}/vent_rate.log" 2>&1
+  fi
+done < "${RESULTS_LIST}"

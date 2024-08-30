@@ -104,7 +104,6 @@ def main():
             assert False, _err_msg
 
         print(f'INFO: these are the inputs: {inputs}')
-
     except AssertionError as e:
         parser.error(str(e))
 

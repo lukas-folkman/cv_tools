@@ -65,39 +65,36 @@ def main():
 
         _err_msg = 'The input must be one JSON or CSV file or one directory containing JSON/CSV files.'
 
-        # "Movie_Site Creeses - Evo_Cam Pos 32 10.67.6.220_2024-02-05-13h08m09s.csv.gz"
-        # "Movie_Site Creeses - Evo_Cam Pos 32 10.67.6.220_2024-02-05-13h08m09s.json.gz"
-
         if os.path.isdir(args.input_fn):
-            csv_inputs = utils.read_files_from_dir(
-                args.input_fn,
-                filter_func=lambda x: x.lower().endswith('.csv'),
-                basename_only=False)
-            gz_csv_inputs = utils.read_files_from_dir(
-                args.input_fn,
-                filter_func=lambda x: x.lower().endswith('.csv.gz'),
-                basename_only=False)
+            # csv_inputs = utils.read_files_from_dir(
+            #     args.input_fn,
+            #     filter_func=lambda x: x.lower().endswith('.csv'),
+            #     basename_only=False)
+            # csv_names = [fn[:-4] for fn in csv_inputs]
+            # gz_csv_inputs = utils.read_files_from_dir(
+            #     args.input_fn,
+            #     filter_func=lambda x: x.lower().endswith('.csv.gz'),
+            #     basename_only=False)
+            # gz_csv_names = [fn[:-7] for fn in gz_csv_inputs]
             json_inputs = utils.read_files_from_dir(
                 args.input_fn,
                 filter_func=lambda x: x.lower().endswith('.json'),
                 basename_only=False)
+            json_names = [fn[:-5] for fn in json_inputs]
             gz_json_inputs = utils.read_files_from_dir(
                 args.input_fn,
                 filter_func=lambda x: x.lower().endswith('.json.gz'),
                 basename_only=False)
-            csv_names = [fn[:-4] for fn in csv_inputs]
-            gz_csv_names = [fn[:-7] for fn in gz_csv_inputs]
-            json_names = [fn[:-5] for fn in json_inputs]
             gz_json_names = [fn[:-8] for fn in gz_json_inputs]
-            gz_csv_inputs = [fn for i, fn in enumerate(gz_csv_inputs) if gz_csv_names[i] not in csv_names]
-            json_inputs = [fn for i, fn in enumerate(json_inputs) if json_names[i] not in csv_names + gz_csv_names]
-            gz_json_inputs = [fn for i, fn in enumerate(gz_json_inputs) if gz_json_names[i] not in csv_names + gz_csv_names + json_names]
-            inputs = csv_inputs + gz_csv_inputs + json_inputs + gz_json_inputs
+
+            # gz_csv_inputs = [fn for i, fn in enumerate(gz_csv_inputs) if gz_csv_names[i] not in csv_names]
+            # json_inputs = [fn for i, fn in enumerate(json_inputs) if json_names[i] not in csv_names + gz_csv_names]
+            gz_json_inputs = [fn for i, fn in enumerate(gz_json_inputs) if gz_json_names[i] not in json_names] # + csv_names + gz_csv_names
+            inputs = json_inputs + gz_json_inputs
 
         elif os.path.exists(args.input_fn):
-            if args.input_fn.lower().endswith('.json') or args.input_fn.lower().endswith('.json.gz'):
-                inputs = [args.input_fn]
-            elif args.input_fn.lower().endswith('.csv') or args.input_fn.lower().endswith('.csv.gz'):
+            if args.input_fn.lower().endswith('.json') or args.input_fn.lower().endswith('.json.gz') \
+                    or args.input_fn.lower().endswith('.csv') or args.input_fn.lower().endswith('.csv.gz'):
                 inputs = [args.input_fn]
             else:
                 assert False, _err_msg
@@ -137,8 +134,8 @@ def main():
             fps_mod=None,
             random_state=42
         )
-        vent_df_no_nulls.to_csv(os.path.join(args.output_dir, f'{video_name}.vent_seq.csv'))
-        fish_qual_df.to_csv(os.path.join(args.output_dir, f'{video_name}.fish_qual.csv'))
+        vent_df_no_nulls.to_csv(os.path.join(args.output_dir, f'{video_name}.vent_seq.csv.gz'))
+        fish_qual_df.to_csv(os.path.join(args.output_dir, f'{video_name}.fish_qual.csv.gz'))
 
         vent_rates, vent_lengths, buccal_df, ram_df, _, _ = vent_utils.get_true_buccal_and_ram_estimates(
             vent_df_no_nulls=vent_df_no_nulls,
@@ -151,10 +148,10 @@ def main():
             filter_true_long_rams=True,
             ram_to_buccal_ratio=args.ram_to_buccal_ratio
         )
-        vent_rates.to_csv(os.path.join(args.output_dir, f'{video_name}.vent_rates.csv'))
-        vent_lengths.to_csv(os.path.join(args.output_dir, f'{video_name}.open_closed_cycle_duration.csv'))
-        buccal_df.to_csv(os.path.join(args.output_dir, f'{video_name}.vent_seq.buccal.csv'))
-        ram_df.to_csv(os.path.join(args.output_dir, f'{video_name}.vent_seq.ram.csv'))
+        vent_rates.to_csv(os.path.join(args.output_dir, f'{video_name}.vent_rates.csv.gz'))
+        vent_lengths.to_csv(os.path.join(args.output_dir, f'{video_name}.open_closed_cycle_duration.csv.gz'))
+        buccal_df.to_csv(os.path.join(args.output_dir, f'{video_name}.vent_seq.buccal.csv.gz'))
+        ram_df.to_csv(os.path.join(args.output_dir, f'{video_name}.vent_seq.ram.csv.gz'))
 
     print(f'FINISHED: {datetime.now().strftime("%d %B %Y, %H:%M:%S")}\n')
 

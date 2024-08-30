@@ -13,32 +13,6 @@ OPEN = 'open'
 CLOSED = 'closed'
 
 
-def replace_DJs_with_nulls(s, drop_DJ_fraction, drop_DJ_sequence=None, status_col='label', inplace=True, verbose=False):
-    assert inplace, 'Only "inplace" fish sequence replacements are implemented'
-    n_DJs = (s[status_col].values == DJ).sum()
-    if n_DJs != 0:
-        drop_fish_DJ = n_DJs / (~s[status_col].isnull()).sum() >= drop_DJ_fraction
-        if not drop_fish_DJ and drop_DJ_sequence is not None:
-            DJ_seq = []
-            for i, val in s[status_col].items():
-                if val == DJ:
-                    DJ_seq.append(i)
-                else:
-                    if len(DJ_seq) >= drop_DJ_sequence:
-                        drop_fish_DJ = True
-                        break
-                    DJ_seq = []
-            drop_fish_DJ = drop_fish_DJ or len(DJ_seq) >= drop_DJ_sequence
-
-        if drop_fish_DJ:
-            if verbose:
-                print(f'Dropping: {n_DJs / (~s[status_col].isnull()).sum()}: {s[status_col].values}')
-            s[status_col] = np.nan
-            assert pd.isnull(s[status_col]).all()
-        else:
-            s.loc[s[status_col].values == DJ, status_col] = np.nan
-
-
 def simply_process_tracks(
         tracks_df,
         drop_DJ_sequence=None,  # if sequence is as long or longer than this number
@@ -208,6 +182,32 @@ def fix_singletons(current, singleton_size=1, conf_thr=None, impute=False, score
         pass
 
     return current
+
+
+def replace_DJs_with_nulls(s, drop_DJ_fraction, drop_DJ_sequence=None, status_col='label', inplace=True, verbose=False):
+    assert inplace, 'Only "inplace" fish sequence replacements are implemented'
+    n_DJs = (s[status_col].values == DJ).sum()
+    if n_DJs != 0:
+        drop_fish_DJ = n_DJs / (~s[status_col].isnull()).sum() >= drop_DJ_fraction
+        if not drop_fish_DJ and drop_DJ_sequence is not None:
+            DJ_seq = []
+            for i, val in s[status_col].items():
+                if val == DJ:
+                    DJ_seq.append(i)
+                else:
+                    if len(DJ_seq) >= drop_DJ_sequence:
+                        drop_fish_DJ = True
+                        break
+                    DJ_seq = []
+            drop_fish_DJ = drop_fish_DJ or len(DJ_seq) >= drop_DJ_sequence
+
+        if drop_fish_DJ:
+            if verbose:
+                print(f'Dropping: {n_DJs / (~s[status_col].isnull()).sum()}: {s[status_col].values}')
+            s[status_col] = np.nan
+            assert pd.isnull(s[status_col]).all()
+        else:
+            s.loc[s[status_col].values == DJ, status_col] = np.nan
 
 
 def get_longest_non_null_sequence(vent_df, singleton_size=None, conf_thr=None, impute=False, score_col='mean_score', status_col='label'):

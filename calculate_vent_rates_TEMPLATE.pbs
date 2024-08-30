@@ -10,7 +10,7 @@
 #PBS -q workq
 
 # make sure you have the code
-#cd ${HOME}/cv_tools/src || exit
+cd ${HOME}/cv_tools/src || exit
 
 # activate conda environment
 source ${HOME}/miniconda3/etc/profile.d/conda.sh
@@ -20,10 +20,13 @@ conda activate cv_tools
 RESULTS_DIR="../results"
 
 # this file specifies the inputs - one per line
-# each line can be either a directory with JSON/CSV tracking results or a single JSON/CSV tracking results file
+# each line can be either a directory with JSON tracking results or a single JSON/CSV tracking results file
 # note that all files must be somewhere within ../results
-# if the location of your JSON/CSV file is "../results/XYZ/ABC/video.csv", then include a line "XYZ/ABC/video.csv"
-# if the directory of your JSON/CSV files is "../data/XYZ/ABC", then include a line "XYZ/ABC"
+# if the location of your JSON file is "../results/XYZ/ABC/video.json", then include a line "XYZ/ABC/video.json"
+# if the location of your JSON file is "../results/XYZ/ABC/video.json.gz", then include a line "XYZ/ABC/video.json.gz"
+# if the location of your CSV file is "../results/XYZ/ABC/video.csv", then include a line "XYZ/ABC/video.csv"
+# if the location of your CSV file is "../results/XYZ/ABC/video.csv.gz", then include a line "XYZ/ABC/video.csv.gz"
+# if the directory of your JSON files is "../data/XYZ/ABC", then include a line "XYZ/ABC"
 RESULTS_LIST="RESULTS_LIST.txt"
 
 # read all lines from the RESULTS_LIST file

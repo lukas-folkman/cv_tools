@@ -4,7 +4,6 @@
 #PBS -M YOUR_EMAIL
 #PBS -m bea
 #PBS -l ncpus=1
-#PBS -l ngpus=1
 #PBS -l mem=4gb
 #PBS -l walltime=100:00:00
 #PBS -q workq

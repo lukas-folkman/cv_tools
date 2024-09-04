@@ -55,7 +55,6 @@ do
      --drop_DJ_fraction 0.5 \
      --n_impute_randomly 1 \
      --fix_early_open_within_closed 1 \
-     --singleton_size 1 \
-     --ram_to_buccal_ratio 2 >> "${OUT_DIR}/vent_rate.log" 2>&1
+     --singleton_size 1 >> "${OUT_DIR}/vent_rate.log" 2>&1
   fi
 done < "${RESULTS_LIST}"

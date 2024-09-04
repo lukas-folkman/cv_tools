@@ -1683,6 +1683,24 @@ def file_or_gzip_exists(fn):
     return os.path.isfile(fn) or os.path.isfile(f'{fn}.gz') or (fn.endswith('.gz') and os.path.isfile(fn[:-3]))
 
 
+def json_datasets_equal(dataset1, dataset2, verbose=True, **read_kwargs):
+    if isinstance(dataset1, str):
+        dataset1 = read_json(dataset1, verbose=False, **read_kwargs)
+    if isinstance(dataset2, str):
+        dataset2 = read_json(dataset2, verbose=False, **read_kwargs)
+
+    print(dataset1.keys())
+    datasets_equal = True
+    for field in ['images', 'categories', 'annotations']:
+        match = sorted(dataset1[field], key=lambda x: x['id']) == \
+                sorted(dataset2[field], key=lambda x: x['id'])
+        datasets_equal = datasets_equal and match
+        if verbose and not match:
+            print(f'INFO: {field} do not match ({len(dataset1[field])} vs {len(dataset2[field])} {field}).')
+
+    return datasets_equal
+
+
 def read_json(fn, assert_correct=True, only_preds=False, only_imgs=False, add_missing_areas=False, fill_in_images=False,
               fix_zero_ann_ids=False, allow_zero_area_boxes=False, fix_to_basenames=False, fix_image_ids=False,
               change_to_zero_based_frames=False, fps_mod=None, verbose=True):

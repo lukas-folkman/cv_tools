@@ -1689,7 +1689,6 @@ def json_datasets_equal(dataset1, dataset2, verbose=True, **read_kwargs):
     if isinstance(dataset2, str):
         dataset2 = read_json(dataset2, verbose=False, **read_kwargs)
 
-    print(dataset1.keys())
     datasets_equal = True
     for field in ['images', 'categories', 'annotations']:
         match = sorted(dataset1[field], key=lambda x: x['id']) == \

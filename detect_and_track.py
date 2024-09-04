@@ -28,7 +28,8 @@ def main():
                              'match the categories used for training the model. A JSON file (e.g. training data file) '
                              'can be supplied instead.')
 
-    parser.add_argument('--track', action='store_true', help='Track fish with BoT-SORT.')
+    parser.add_argument('--track', action='store_true', help='Track fish with "tracker" (default: "botsort").')
+    parser.add_argument('--tracker', choices=['botsort', 'bytetrack'], default='botsort')
     parser.add_argument('--track_match_thr', type=float, default=0.7,
                         help='Only YOLO. Intersection over union threshold for tracking, experimental feature.')
     parser.add_argument('--new_track_thr', type=float, default=0.5,
@@ -75,6 +76,8 @@ def main():
         assert 0 <= args.threshold <= 1, '"threshold" must be greater or equal to 0 and less or equal to 1'
         assert 0 <= args.NMS_threshold <= 1, '"NMS_threshold" must be greater or equal to 0 and less or equal to 1'
         assert 0 <= args.vis_threshold <= 1, '"vis_threshold" must be greater or equal to 0 and less or equal to 1'
+        assert not (args.track and args.model == 'dt2') or args.tracker == utils.BOT_SORT, '"bytetrack" not for "dt2"'
+        assert args.tracker in [None, utils.BOT_SORT, utils.BYTE_TRACK], 'incorrect "tracker"'
 
         if args.model_cat_names is not None \
                 and len(args.model_cat_names) == 1 \
@@ -143,7 +146,7 @@ def main():
         threshold=args.threshold, NMS_threshold=args.NMS_threshold,
         detections_per_image=args.detections_per_image, vis_threshold=args.vis_threshold,
         save_pred_frames=not args.do_not_save_pred_frames, evaluate=not args.do_not_evaluate, device=args.device,
-        track=args.track, track_buffer=args.track_buffer, new_track_thr=args.new_track_thr,
+        track=args.tracker if args.track else False, track_buffer=args.track_buffer, new_track_thr=args.new_track_thr,
         track_match_thr=args.track_match_thr, track_low_thr=args.track_low_thr, track_high_thr=args.track_high_thr
     )
 

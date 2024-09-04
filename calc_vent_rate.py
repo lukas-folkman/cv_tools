@@ -115,30 +115,31 @@ def main():
         print(fn)
         video_name = os.path.basename(fn)[:-EXT_LENS[[fn.lower().endswith(ext) for ext in EXTS]][0]]
         print(video_name)
-        # if fn.lower().endswith('.csv') or fn.lower().endswith('.csv.gz'):
-        #     tracks_df = pd.read_csv(fn)
-        # else:
-        #     tracks_df = utils.predictions_to_df(pred_fn=fn, categories=args.model_cat_names)
-        # vent_df_no_nulls, fish_qual_df, _ = vent_utils.simply_process_tracks(
-        #     tracks_df=tracks_df,
-        #     drop_DJ_sequence=args.drop_DJ_sequence,
-        #     drop_DJ_fraction=args.drop_DJ_fraction,
-        #     n_impute_randomly=args.n_impute_randomly,
-        #     fix_early_open_within_closed=args.fix_early_open_within_closed,
-        #     fix_early_conf_thr=args.fix_early_conf_thr,
-        #     singleton_size=args.singleton_size,
-        #     singleton_keep_conf_thr=args.singleton_keep_conf_thr,
-        #     impute_singletons=args.impute_singletons,
-        #     other_cols='score',
-        #     status_col='label',
-        #     fps_mod=None,
-        #     random_state=42
-        # )
-        # vent_df_no_nulls.to_csv(os.path.join(args.output_dir, f'{video_name}.vent_seq.csv.gz'))
-        # fish_qual_df.to_csv(os.path.join(args.output_dir, f'{video_name}.fish_qual.csv.gz'))
+        if fn.lower().endswith('.csv') or fn.lower().endswith('.csv.gz'):
+            tracks_df = pd.read_csv(fn)
+        else:
+            tracks_df = utils.predictions_to_df(pred_fn=fn, categories=args.model_cat_names)
+        vent_df_no_nulls, fish_qual_df, _ = vent_utils.simply_process_tracks(
+            tracks_df=tracks_df,
+            drop_DJ_sequence=args.drop_DJ_sequence,
+            drop_DJ_fraction=args.drop_DJ_fraction,
+            n_impute_randomly=args.n_impute_randomly,
+            fix_early_open_within_closed=args.fix_early_open_within_closed,
+            fix_early_conf_thr=args.fix_early_conf_thr,
+            singleton_size=args.singleton_size,
+            singleton_keep_conf_thr=args.singleton_keep_conf_thr,
+            impute_singletons=args.impute_singletons,
+            other_cols='score',
+            status_col='label',
+            fps_mod=None,
+            random_state=42
+        )
+        vent_df_no_nulls.to_csv(os.path.join(args.output_dir, f'{video_name}.vent_seq.csv.gz'))
+        fish_qual_df.to_csv(os.path.join(args.output_dir, f'{video_name}.fish_qual.csv.gz'))
 
-        vent_df_no_nulls = pd.read_csv(os.path.join(args.output_dir, f'{video_name}.vent_seq.csv.gz'), index_col=['video_id', 'fish_id', 'change_id'])
-        fish_qual_df = pd.read_csv(os.path.join(args.output_dir, f'{video_name}.fish_qual.csv.gz'), index_col=['video_id', 'fish_id'])
+        # JUST IN CASE I NEED SHORTCUTS
+        # vent_df_no_nulls = pd.read_csv(os.path.join(args.output_dir, f'{video_name}.vent_seq.csv.gz'), index_col=['video_id', 'fish_id', 'change_id'])
+        # fish_qual_df = pd.read_csv(os.path.join(args.output_dir, f'{video_name}.fish_qual.csv.gz'), index_col=['video_id', 'fish_id'])
 
         vent_rates, vent_lengths, buccal_df, ram_df, _, _ = vent_utils.get_true_buccal_and_ram_estimates(
             vent_df_no_nulls=vent_df_no_nulls,

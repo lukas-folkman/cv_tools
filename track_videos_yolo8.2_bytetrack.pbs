@@ -1,0 +1,66 @@
+#!/bin/bash
+
+#PBS -N fish_track
+#PBS -M YOUR_EMAIL
+#PBS -m bea
+#PBS -l ncpus=8
+#PBS -l ngpus=1
+#PBS -l mem=16gb
+#PBS -l walltime=100:00:00
+#PBS -q gpuq2
+
+# make sure you have the code
+cd ${HOME}/cv_tools/src || exit
+
+# activate conda environment
+source ${HOME}/miniconda3/etc/profile.d/conda.sh
+conda activate yolov8.2 || exit
+
+# these are the data, results, and models locations
+DATA_DIR="../data"
+RESULTS_DIR="../results"
+MODEL_DIR="../models"
+
+# these are the model weights files
+YOLO82_MODEL="${MODEL_DIR}/yolo8.LFQC.e100.final.seed1.fp16.engine"
+TRACKER="bytetrack"
+OUT_NAME="yolo8.2_bytetrack"
+
+# this file specifies the inputs - one per line
+# each line can be either a directory with videos (mp4 files) or a video file (mp4)
+# note that all files must be somewhere within ../data
+# if the location of your video file is "../data/XYZ/ABC/video.mp4", then include a line "XYZ/ABC/video.mp4"
+# if the directory of your video files is "../data/XYZ/ABC", then include a line "XYZ/ABC"
+VIDEO_LIST="VIDEO_LIST.txt"
+
+# read all lines from the VIDEO_LIST file
+while read -r video_path
+do
+  if [[ -n "${video_path}" ]]; then
+
+    # check if the input line is a directory or a single file
+    if [[ -d "${DATA_DIR}/${video_path}" ]]; then
+        subdir="${video_path}"
+      elif [[ -f "${DATA_DIR}/${video_path}" ]]; then
+        subdir="$(dirname "${video_path}")"
+      else
+        echo "ERROR: ${DATA_DIR}/${video_path} does not exist, skipping"
+        continue
+    fi
+
+    # create the output directory
+    OUT_DIR="${RESULTS_DIR}/${subdir}/${OUT_NAME}"
+    mkdir -p "${OUT_DIR}"
+
+    echo "INPUTS: ${video_path}"
+    echo "MODEL: ${YOLO82_MODEL}"
+    echo "RESULTS: ${OUT_DIR}"
+
+    # finally, detect and track
+    python detect_and_track.py \
+     --input_fn "${DATA_DIR}/${video_path}" --weights_fn "${YOLO82_MODEL}" --model "yolo8" \
+     --track --tracker ${TRACKER} \
+     --model_cat_names "open" "closed" "DJ" --output_dir "${OUT_DIR}" \
+     --video_input --do_not_evaluate --do_not_save_pred_frames >> "${OUT_DIR}/fish_track.log" 2>&1
+  fi
+done < "${VIDEO_LIST}"

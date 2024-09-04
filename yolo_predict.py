@@ -17,8 +17,9 @@ else:
 def yolo_predict(model, dataset, output_dir=None, output_fn=None, video_input=None, model_cat_names=None, predict_cat_names=None,
                  threshold=None, NMS_threshold=None, detections_per_image=None, img_size=None,
                  track=None, track_buffer=None, new_track_thr=None, track_match_thr=None, track_high_thr=None, track_low_thr=None,
-                 save_pred_frames=False, vis_threshold=None, evaluate=False, warmup=False,
-                 stream=True, device=None, compress=True, iouType='bbox', eval_log_info=None, quick_debug=False):
+                 save_pred_frames=False, vis_threshold=None, evaluate=False, warmup=False, every_n_frame=None,
+                 stream=True, device=None, compress=True, iouType='bbox', eval_log_info=None,
+                 inference_only=False, quick_debug=False):
 
     assert track in [None, True, False, utils.SORT, utils.BOT_SORT, utils.BYTE_TRACK, utils.DUMMY_TRACK]
     if track is True:
@@ -33,6 +34,8 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, video_input=No
         from ultralytics.engine.results import Results
 
     assert video_input in [None, False, True]
+    if every_n_frame is not None and every_n_frame != 1:
+        assert isinstance(dataset, str) and ((os.path.isdir(dataset) and video_input) or utils.is_video(dataset))
     if isinstance(dataset, str) and os.path.isdir(dataset):
         vids = utils.read_videos_from_dir(dir_name=dataset, basename_only=False)
         if video_input:
@@ -73,11 +76,12 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, video_input=No
         predict_cat_names = model_cat_names
 
     if isinstance(model, str):
+        inference_only = inference_only or model.endswith('.engine') or model.endswith('.onnx')
         model = YOLO(model)
     os.makedirs(output_dir, exist_ok=True)
 
-    _yolo_cat_names = [name for name in model.names]
-    if model_cat_names is not None:
+    if model_cat_names is not None and not inference_only:
+        _yolo_cat_names = [name for name in model.names]
         assert list(range(len(model_cat_names))) == _yolo_cat_names or list(model_cat_names) == _yolo_cat_names, \
             (list(range(len(model_cat_names))), list(model_cat_names), _yolo_cat_names)
 
@@ -135,6 +139,8 @@ def yolo_predict(model, dataset, output_dir=None, output_fn=None, video_input=No
         classes=test_classes_idx, stream=stream, device=utils.get_device(device, model='yolo8'),
         save_crop=False, save_txt=False, save_conf=False
     )
+    if every_n_frame is not None and every_n_frame != 1:
+        kwargs['vid_stride'] = every_n_frame
     if img_size is not None:
         kwargs['imgsz'] = img_size
     if threshold is not None:

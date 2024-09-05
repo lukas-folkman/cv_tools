@@ -3150,8 +3150,45 @@ def subset_dataset(dataset, size, random_state=None):
     print(f'REDUCING TO {len(images)} IMAGES and {len(dataset["annotations"])} annotations')
 
 
-def subsample_dataset(dataset, fraction):
-    assert isinstance(fraction, float)
+def subsample_dataset(dataset, n_imgs=None, n_groups=None, seed=None):
+    assert n_imgs is None or n_imgs > 0
+    assert n_groups is None or n_groups > 0
+    assert not (n_imgs is None and n_groups is None)
+    random_state = np.random.RandomState(seed)
+    imgs = np.asarray(dataset['images'])
+    random_state.shuffle(imgs)
+
+    if n_imgs is not None:
+        if n_imgs < 1:
+            n_imgs *= len(imgs)
+        n_imgs = int(n_imgs)
+
+    if n_groups is not None:
+        groups = np.asarray(get_filename_groups(imgs))
+        if n_groups < 1:
+            n_groups *= len(np.unique(groups))
+        n_groups = int(n_groups)
+
+        while True:
+            idx = random_state.choice(
+                np.arange(len(np.unique(groups)), dtype=int), size=n_groups, replace=False)
+            mask = np.isin(groups, np.unique(groups)[idx])
+            if n_imgs is None or mask.sum() >= n_imgs:
+                break
+        imgs = imgs[mask]
+
+    if n_imgs is not None:
+        idx = random_state.choice(
+            np.arange(len(imgs), dtype=int), size=n_imgs, replace=False)
+        imgs = imgs[idx]
+
+    dataset['images'] = sorted(imgs.tolist(), key=lambda x: x['id'])
+    dataset['annotations'] = filter_annotations_with_images(dataset=dataset)
+
+    groups = np.asarray(get_filename_groups(dataset['images']))
+    print('SUBSAMPLED GROUPS:', len(np.unique(groups)))
+    print('SUBSAMPLED IMAGES', len(dataset['images']))
+
     return dataset
 
 
@@ -3162,7 +3199,7 @@ def prepare_datasets(data_json_fns, data_img_dirs, test_json_fns, test_img_dirs,
                      merge_categories_as=None, data_filters=None, img_transforms=None, coinflip_transform=False,
                      extra_train_json_fns=None, extra_train_img_dirs=None,
                      drop_test_groups_in_extra_train=False, drop_val_groups_in_extra_train=False,
-                     extra_val_size=0, subsample_train=None,
+                     extra_val_size=0, subsample_train=None, subsample_groups=None,
                      out_formats='coco', copy_imgs='auto', segm=None, sort_images=False, save=True, quick_debug=False):
     assert_n_folds(n_folds)
 
@@ -3357,10 +3394,11 @@ def prepare_datasets(data_json_fns, data_img_dirs, test_json_fns, test_img_dirs,
 
     apply_data_filters(datasets, data_filters, n_folds=n_folds, masked_bboxes_per_image=masked_bboxes_per_image)
 
-    if subsample_train:
+    if subsample_train or subsample_groups:
         for i in range(n_folds) if n_folds != 1 else [None]:
             train_val_test_dict = datasets[i] if i is not None else datasets
-            train_val_test_dict['train'] = subsample_dataset(train_val_test_dict['train'], fraction=subsample_train)
+            train_val_test_dict['train'] = subsample_dataset(
+                train_val_test_dict['train'], n_imgs=subsample_train, n_groups=subsample_groups, seed=seed)
 
     if merge_categories_as is not None:
         for i in range(n_folds) if n_folds != 1 else [None]:
@@ -4964,7 +5002,7 @@ def predictions_to_df(dataset=None, pred_fn=None, categories=None, input_fn=None
         df['fish_id'] -= (df['fish_id'].min() - 1)
 
     if fix_fps_mod is not None and fix_fps_mod != 1:
-        for video_id in df['video_id'].unique():
+        for video_id in np.unique(df['video_id']):
             video_mask = df['video_id'] == video_id
             idx = np.arange(df.loc[video_mask, 'frame_id'].min(), df.loc[video_mask, 'frame_id'].max() + 1, fix_fps_mod, dtype=int)
             assert df.loc[video_mask, 'frame_id'].values.isin(idx).all()

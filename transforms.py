@@ -825,9 +825,9 @@ def MSRCR(img, sigmas=[15, 80, 250], alpha=125.0, beta=46.0, G=5.0, b=25.0, flav
         elif approx == 'gpu':
             raise NotImplementedError()
         else:
-            # gb_img = cv2.GaussianBlur(img, (0, 0), sigma)
-            assert sigma in [15, 80, 250]
-            gb_img = cv2.GaussianBlur(img, (121, 121) if sigma == 15 else (169, 169) if sigma == 80 else (169, 169) if sigma == 250 else "ERROR", sigma)
+            gb_img = cv2.GaussianBlur(img, (0, 0), sigma)
+            # assert sigma in [15, 80, 250]
+            # gb_img = cv2.GaussianBlur(img, (121, 121) if sigma == 15 else (169, 169) if sigma == 80 else (169, 169) if sigma == 250 else "ERROR", sigma)
 
         ssr = np.log10(img) - np.log10(gb_img)
         return ssr
@@ -906,7 +906,8 @@ def MSRCR(img, sigmas=[15, 80, 250], alpha=125.0, beta=46.0, G=5.0, b=25.0, flav
         elif flavour == 'MSR':
             img = img_msr
         elif flavour == 'SSR':
-            img = singleScale(img, sigma=sigmas[1], tmp_dir=tmp_dir)
+            assert len(sigmas) == 1
+            img = singleScale(img, sigma=sigmas[0], tmp_dir=tmp_dir)
         else:
             raise ValueError
 
@@ -994,6 +995,18 @@ def grey_world_LAB(img, brightness_factor=1.0, format=BGR_FORMAT):
 
 
 IMG_TRANSFORMS = {
+
+    'SSR_15_fk': lambda x: MSRCR(img=x, flavour='SSR', sigmas=[15]),
+    'SSR_80_fk': lambda x: MSRCR(img=x, flavour='SSR', sigmas=[80]),
+    'SSR_250_fk': lambda x: MSRCR(img=x, flavour='SSR', sigmas=[250]),
+    'MSR_15_80_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[15, 80]),
+    'MSR_80_250_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[80, 250]),
+    'MSR_15_250_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[15, 250]),
+    'MSR_15_80_250_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[15, 80, 250]),
+    'MSRCR_15_80_250_fk': lambda x: MSRCR(img=x, flavour='MSRCR', sigmas=[15, 80, 250]),
+    'MSRCR_10_50_100_fk': lambda x: MSRCR(img=x, flavour='MSRCR', sigmas=[10, 50, 100]),
+    'MSRCR_5_30_80_fk': lambda x: MSRCR(img=x, flavour='MSRCR', sigmas=[5, 30, 80]),
+
     'none': lambda x: x,
     'bw': make_grayscale,
 

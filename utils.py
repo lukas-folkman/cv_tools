@@ -3150,11 +3150,13 @@ def subset_dataset(dataset, size, random_state=None):
     print(f'REDUCING TO {len(images)} IMAGES and {len(dataset["annotations"])} annotations')
 
 
-def subsample_dataset(dataset, n_imgs=None, n_groups=None, seed=None):
+def subsample_dataset(dataset, n_imgs=None, n_groups=None, seed=None, x=None):
+    if x is None:
+        x = 1
     assert n_imgs is None or n_imgs > 0
     assert n_groups is None or n_groups > 0
     assert not (n_imgs is None and n_groups is None)
-    random_state = np.random.RandomState(seed)
+    random_state = np.random.RandomState(seed * x)
     imgs = np.asarray(dataset['images'])
     random_state.shuffle(imgs)
 
@@ -3398,7 +3400,7 @@ def prepare_datasets(data_json_fns, data_img_dirs, test_json_fns, test_img_dirs,
         for i in range(n_folds) if n_folds != 1 else [None]:
             train_val_test_dict = datasets[i] if i is not None else datasets
             train_val_test_dict['train'] = subsample_dataset(
-                train_val_test_dict['train'], n_imgs=subsample_train, n_groups=subsample_groups, seed=seed)
+                train_val_test_dict['train'], n_imgs=subsample_train, n_groups=subsample_groups, x=2, seed=seed)
 
     if merge_categories_as is not None:
         for i in range(n_folds) if n_folds != 1 else [None]:

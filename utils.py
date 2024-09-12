@@ -3400,7 +3400,7 @@ def prepare_datasets(data_json_fns, data_img_dirs, test_json_fns, test_img_dirs,
         for i in range(n_folds) if n_folds != 1 else [None]:
             train_val_test_dict = datasets[i] if i is not None else datasets
             train_val_test_dict['train'] = subsample_dataset(
-                train_val_test_dict['train'], n_imgs=subsample_train, n_groups=subsample_groups, x=2, seed=seed)
+                train_val_test_dict['train'], n_imgs=subsample_train, n_groups=subsample_groups, x=3, seed=seed)
 
     if merge_categories_as is not None:
         for i in range(n_folds) if n_folds != 1 else [None]:

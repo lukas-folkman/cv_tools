@@ -1002,10 +1002,25 @@ IMG_TRANSFORMS = {
     'MSR_15_80_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[15, 80]),
     'MSR_80_250_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[80, 250]),
     'MSR_15_250_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[15, 250]),
+    'MSR_10_50_100_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[10, 50, 100]),
+    # 'MSR_5_30_80_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[5, 30, 80]),
     'MSR_15_80_250_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[15, 80, 250]),
     'MSRCR_15_80_250_fk': lambda x: MSRCR(img=x, flavour='MSRCR', sigmas=[15, 80, 250]),
     'MSRCR_10_50_100_fk': lambda x: MSRCR(img=x, flavour='MSRCR', sigmas=[10, 50, 100]),
     'MSRCR_5_30_80_fk': lambda x: MSRCR(img=x, flavour='MSRCR', sigmas=[5, 30, 80]),
+
+# 'MSR_5_27_83_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[5, 27, 83]), # 3
+# 'MSR_6_32_100_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[6, 32, 100]), # 2.5
+# 'MSR_8_40_125_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[8, 40, 125]), # 2
+# 'MSR_10_53_167_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[10, 53, 167]), # 1.5
+# 'MSR_22_120_375_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[22, 120, 375]), # 1.5
+# 'MSR_30_160_500_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[30, 160, 500]), # 2
+# 'MSR_38_200_625_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[38, 200, 625]), # 2.5
+# 'MSR_45_240_750_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[45, 240, 750]), # 3
+
+'MSR_5_30_80_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[5, 30, 80]),  # x/ 3
+'MSR_10_40_125_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[10, 40, 125]),  # x / 2
+'MSR_30_160_500_fk': lambda x: MSRCR(img=x, flavour='MSR', sigmas=[30, 160, 500]),  # x * 2
 
     'none': lambda x: x,
     'bw': make_grayscale,

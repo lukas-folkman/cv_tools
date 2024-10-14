@@ -5109,7 +5109,7 @@ def get_resize_long_edge_shape(h: int, w: int, long_size: int, short_size: int) 
     return int(new_h), int(new_w)
 
 
-def resize_image(img, new_h, new_w, interp):
+def resize_image(img, new_h, new_w, interp, return_array=True):
     """
     Copyright (c) 2020 Meta Research
     Apache-2.0 license
@@ -5120,10 +5120,13 @@ def resize_image(img, new_h, new_w, interp):
     monochrome = len(img.shape) > 2 and img.shape[2] == 1
     pil_image = Image.fromarray(img) if not monochrome else Image.fromarray(img[:, :, 0], mode="L")
     pil_image = pil_image.resize((new_w, new_h), interp)
-    img = np.asarray(pil_image)
-    if monochrome:
-        img = np.expand_dims(img, -1)
-    return img
+    if return_array:
+        img = np.asarray(pil_image)
+        if monochrome:
+            img = np.expand_dims(img, -1)
+        return img
+    else:
+        return pil_image
 
 
 def resize_bbox(bbox, old_img_h, old_img_w, new_img_h, new_img_w, bbox_format='XYWH'):

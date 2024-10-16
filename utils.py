@@ -5192,7 +5192,7 @@ def apply_box(box: np.ndarray, old_img_h, old_img_w, new_img_h, new_img_w) -> np
 
 
 def resize_dataset(dataset, img_dir, new_img_dir, short_size, long_size, resize_shape_op, do_not_enlarge=False,
-                   interp=Image.BILINEAR):
+                   interp=Image.BILINEAR, do_not_write_images=False):
     annotations = get_annotations_dict(dataset)
     for img in dataset['images']:
         image = read_image(os.path.join(img_dir, img['file_name']))
@@ -5200,16 +5200,18 @@ def resize_dataset(dataset, img_dir, new_img_dir, short_size, long_size, resize_
         new_h, new_w = resize_shape_op(h=image.shape[0], w=image.shape[1], short_size=short_size, long_size=long_size)
         if not do_not_enlarge or (new_h < old_img_h and new_w < old_img_w):
             print('Resize', img['file_name'], (old_img_w, old_img_h), '-->', (new_w, new_h))
-            image = resize_image(img=image, new_h=new_h, new_w=new_w, interp=interp)
-            new_img_h, new_img_w = image.shape[:2]
-            assert short_size is None or min(new_img_h, new_img_w) <= short_size
-            assert long_size is None or max(new_img_h, new_img_w) <= long_size
-            write_image(image=image, image_fn=os.path.join(new_img_dir, img['file_name']))
-            img['height'], img['width'] = image.shape[:2]
+            if not do_not_write_images:
+                image = resize_image(img=image, new_h=new_h, new_w=new_w, interp=interp)
+                assert image.shape[0] == new_h
+                assert image.shape[1] == new_w
+                assert short_size is None or min(new_h, new_w) <= short_size
+                assert long_size is None or max(new_h, new_w) <= long_size
+                write_image(image=image, image_fn=os.path.join(new_img_dir, img['file_name']))
+            img['height'], img['width'] = new_h, new_w
             for ann in annotations[img['id']]:
                 ann['bbox'] = resize_bbox(
                     ann['bbox'], old_img_h=old_img_h, old_img_w=old_img_w,
-                    new_img_h=new_img_h, new_img_w=new_img_w, bbox_format='XYWH'
+                    new_img_h=new_h, new_img_w=new_w, bbox_format='XYWH'
                 )
         else:
             print('No change', img['file_name'], (old_img_w, old_img_h))
